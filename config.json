@@ -1,18 +1,9 @@
 {
-    "prune_methods": {
-      "scale": true,
-      "scale_ratio": 0.1,
-      "opacity": true,
-      "opacity_ratio": 0.1,
-      "density": true,
-      "pointcept_distance": true,
-      "normal": true,
-      "sor": true
-    },
     "prune_params": {
       "density_eps": 0.05,
       "density_min_points": 50,
-      "pointcept_max_distance": 0.0001,
+      "pdistance_max": 0.005,
+      "pointcept_max_distance":0.001,
       "normal_k_neighbors": 5,
       "normal_cos_threshold": 0.9,
       "sor_nb_neighbors": 40,

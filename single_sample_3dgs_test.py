@@ -1,54 +1,42 @@
 import numpy as np
 import argparse, json
 from pruning import prune_3dgs
-from utils import load_pointcept_data, load_3dgs_data, update_3dgs_attributes, remove_duplicates, remove_outliers_3dgs, save_ply
+from utils import load_pointcept_data, load_3dgs_data, update_3dgs_attributes, remove_duplicates, save_ply
 import os
 import open3d as o3d
 from plyfile import PlyData, PlyElement
 
 
-def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_methods=None, prune_params=None, exp="None", k_neighbors=5, use_label_consistency=True):
+import numpy as np
+import argparse
+import json
+from pruning import prune_3dgs
+from utils import load_pointcept_data, load_3dgs_data, update_3dgs_attributes, remove_duplicates, save_ply
+import os
+from plyfile import PlyData, PlyElement
+
+def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_methods=None, prune_params=None, k_neighbors=5, use_label_consistency=True, ignore_threshold=0.6, filter_ignore_label=False):
     """
     Pointcept Point Cloud와 3DGS Point Cloud를 병합하고 PLY 파일로 저장.
     
     Args:
         pointcept_dir (str): Pointcept 데이터 디렉토리 (예: scannet/train/scene0000_00).
         path_3dgs (str): 3DGS Point Cloud 경로.
-        output_dir (str): 출력 디렉토리 (예: scannet_merged/train/scene0000_00).
+        output_dir (str): 출력 디렉토리 (예: scannet_merged/train).
+        exp (str): 실험 이름 (예: scene0000_00).
         prune_methods (dict): 적용할 pruning 방법 및 ratio.
         prune_params (dict): pruning 하이퍼파라미터.
-        exp (str): 실험 이름.
         k_neighbors (int): 라벨 복사 및 일관성 체크에 사용할 이웃 점 개수.
         use_label_consistency (bool): 라벨 일관성 필터링 사용 여부.
+        ignore_threshold (float): ignore_index(-1) 라벨의 비율이 이 값 이상이면 결과 라벨을 -1로 설정.
+        filter_ignore_label (bool): -1 라벨 3DGS 점을 필터링할지 여부.
     """
-    # 기본값 설정
-    if prune_methods is None:
-        prune_methods = {
-            'scale': False,
-            'scale_ratio': 0.0,
-            'opacity': False,
-            'opacity_ratio': 0.0,
-            'density': False,
-            'pointcept_distance': False,
-            'normal': False,
-            'sor': True
-        }
-    if prune_params is None:
-        prune_params = {
-            'density_eps': 0.1,
-            'density_min_points': 10,
-            'pointcept_max_distance': 0.2,
-            'normal_k_neighbors': 10,
-            'normal_cos_threshold': 0.8,
-            'sor_nb_neighbors': 20,
-            'sor_std_ratio': 2.0
-        }
 
     # 1. Pointcept 데이터 로드 (.npy 파일에서)
     pointcept_data = load_pointcept_data(pointcept_dir)
     points_pointcept = pointcept_data['coord']
     colors_pointcept = pointcept_data['color']
-    normals_pointcept = pointcept_data['normal']  # Pointcept 점의 법선 정보 로드
+    normals_pointcept = pointcept_data['normal']
     labels_pointcept = pointcept_data['segment20']
     labels200_pointcept = pointcept_data['segment200']
     instances_pointcept = pointcept_data['instance']
@@ -64,7 +52,7 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
     # 4. 3DGS 점의 색상과 라벨을 복사
     colors_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, mask = update_3dgs_attributes(
         points_3dgs, points_pointcept, colors_pointcept, labels_pointcept, labels200_pointcept, instances_pointcept,
-        k_neighbors=k_neighbors, use_label_consistency=use_label_consistency
+        k_neighbors=k_neighbors, use_label_consistency=use_label_consistency, ignore_threshold=ignore_threshold
     )
 
     # 라벨 일관성 필터링 적용
@@ -75,30 +63,51 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
     labels200_3dgs = labels200_3dgs[mask]
     instances_3dgs = instances_3dgs[mask]
 
+    # 4.5. -1 라벨 3DGS 점 비율 출력
+    ignore_count = np.sum(labels_3dgs == -1)
+    total_count = len(labels_3dgs)
+    ignore_ratio = ignore_count / total_count if total_count > 0 else 0
+    print(f"3DGS points with label -1: {ignore_count}/{total_count} (Ratio: {ignore_ratio:.4f})")
+
+    # 4.6. -1 라벨 3DGS 점 필터링 (선택적)
+    if filter_ignore_label:
+        valid_mask = labels_3dgs != -1
+        points_3dgs = points_3dgs[valid_mask]
+        colors_3dgs = colors_3dgs[valid_mask]
+        normals_3dgs = normals_3dgs[valid_mask]
+        labels_3dgs = labels_3dgs[valid_mask]
+        labels200_3dgs = labels200_3dgs[valid_mask]
+        instances_3dgs = instances_3dgs[valid_mask]
+        print(f"Filtered {np.sum(~valid_mask)} 3DGS points with label -1")
+
     # 5. 중복 점 제거 (3DGS 점 제거)
     points_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs = remove_duplicates(
         points_3dgs, points_pointcept, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs
     )
 
-    # 6. 3DGS 점에 Outlier 제거 적용
-    points_3dgs, colors_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs = remove_outliers_3dgs(
-        points_3dgs, colors_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs
-    )
-
-    # 7. 병합
+    # 6. 병합
     points_merged = np.vstack((points_pointcept, points_3dgs))
     colors_merged = np.vstack((colors_pointcept, colors_3dgs))
     labels_merged = np.concatenate((labels_pointcept, labels_3dgs))
     print(f"Final merged points: {len(points_merged)} (Pointcept: {len(points_pointcept)}, 3DGS: {len(points_3dgs)})")
 
-    # 8. PLY 파일로 저장
-    os.makedirs(output_dir, exist_ok=True)
-    output_ply_path = os.path.join(output_dir, exp, f"{exp}.ply")
+    # 7. PLY 파일로 저장
+    output_dir_path = os.path.join(output_dir, exp)
+    os.makedirs(output_dir_path, exist_ok=True)
+    output_ply_path = os.path.join(output_dir_path, f"{exp}.ply")
     save_ply(
         points_merged, colors_merged, labels_merged, output_ply_path,
         save_separate_labels=True,
-        points_pointcept=points_pointcept,  # Pointcept 점 전달
-        points_3dgs=points_3dgs            # 3DGS 점 전달
+        points_pointcept=points_pointcept,
+        colors_pointcept=colors_pointcept,
+        points_3dgs=points_3dgs
+    )
+
+    # 3DGS 점 별도 저장 (라벨 포함)
+    dgs_ply_path = os.path.join(output_dir_path, f"{exp}_3dgs.ply")
+    save_ply(
+        points_3dgs, colors_3dgs, labels_3dgs, dgs_ply_path,
+        save_separate_labels=False
     )
 
 def process_single_scene(scene, input_root, output_root, exp, path_3dgs_root, prune_methods, prune_params, k_neighbors=5, use_label_consistency=True):
@@ -132,7 +141,7 @@ def process_single_scene(scene, input_root, output_root, exp, path_3dgs_root, pr
 
         # 병합 및 PLY 파일로 저장
         merge_pointcept_with_3dgs(
-            pointcept_dir, path_3dgs, output_dir, prune_methods, prune_params, exp,
+            pointcept_dir, path_3dgs, output_dir, exp, prune_methods, prune_params,
             k_neighbors=k_neighbors, use_label_consistency=use_label_consistency
         )
     except Exception as e:
@@ -223,6 +232,7 @@ if __name__ == "__main__":
         'sor': args.enable_sor
     }
 
+    # config.json에서 prune_params 로드
     config_path = './config.json'
     with open(config_path, 'r') as f:
         config = json.load(f)

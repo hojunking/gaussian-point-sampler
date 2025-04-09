@@ -1,3 +1,4 @@
 /test/
 /dataset/
 /results_semantic_seg/
+*.pyc

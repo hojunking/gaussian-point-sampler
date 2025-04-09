@@ -1,118 +1,11 @@
 import numpy as np
 import open3d as o3d
+from sklearn.neighbors import NearestNeighbors
 
 # Pruning 함수들
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-def prune_3dgs_by_scale(vertex_data_3dgs, scale_threshold=0.1):
-    """
-    3DGS 점 중 exp(scale) 값이 임계값보다 큰 점을 제거.
-    
-    Args:
-        vertex_data_3dgs: 3DGS PLY 파일의 vertex 데이터.
-        scale_threshold (float): exp(scale) 값의 최대 임계값.
-    
-    Returns:
-        mask: 제거할 점의 마스크 (True: 제거, False: 유지).
-    """
-    num_points_before = len(vertex_data_3dgs)
-    scales = np.stack([vertex_data_3dgs[f'scale_{i}'] for i in range(3)], axis=-1)
-    max_scale = np.max(scales, axis=1)
-    exp_scale = np.exp(max_scale)  # 로그 스케일에서 실제 스케일로 변환
-    mask = exp_scale > scale_threshold
-    num_points_pruned = mask.sum()
-    print(f"Scale Pruning: Before {num_points_before} points, Pruned {num_points_pruned} points with exp(scale) > {scale_threshold}, After {num_points_before - num_points_pruned} points")
-    return mask
-
-def prune_3dgs_by_opacity(vertex_data_3dgs, opacity_threshold=0.1):
-    """
-    3DGS 점 중 sigmoid(opacity) 값이 임계값보다 낮은 점을 제거.
-    
-    Args:
-        vertex_data_3dgs: 3DGS PLY 파일의 vertex 데이터.
-        opacity_threshold (float): sigmoid(opacity) 값의 최소 임계값.
-    
-    Returns:
-        mask: 제거할 점의 마스크 (True: 제거, False: 유지).
-    """
-    num_points_before = len(vertex_data_3dgs)
-    opacity = vertex_data_3dgs['opacity']
-    sigmoid_opacity = sigmoid(opacity)  # 로짓 값에서 실제 투명도로 변환
-    mask = sigmoid_opacity < opacity_threshold
-    num_points_pruned = mask.sum()
-    print(f"Opacity Pruning: Before {num_points_before} points, Pruned {num_points_pruned} points with sigmoid(opacity) < {opacity_threshold}, After {num_points_before - num_points_pruned} points")
-    return mask
-
-def prune_3dgs_by_density(points_3dgs, normals_3dgs, vertex_data_3dgs, eps=0.1, min_points=10):
-    """
-    밀도 기반 Pruning (DBSCAN 사용).
-    
-    Args:
-        points_3dgs (np.ndarray): 3DGS 점 좌표 (N, 3).
-        normals_3dgs (np.ndarray): 3DGS 점 법선 (N, 3).
-        vertex_data_3dgs (PlyData): 3DGS 점의 원본 데이터.
-        eps (float): DBSCAN의 이웃 거리 임계값.
-        min_points (int): 클러스터로 간주하기 위한 최소 점 개수.
-    
-    Returns:
-        tuple: Pruning된 (points_3dgs, normals_3dgs, vertex_data_3dgs).
-    """
-    num_points_before = len(points_3dgs)
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points_3dgs)
-    labels = np.array(pcd.cluster_dbscan(eps=eps, min_points=min_points, print_progress=False))
-    
-    # 라벨이 -1인 점은 노이즈로 간주
-    mask = labels != -1
-    points_3dgs = points_3dgs[mask]
-    normals_3dgs = normals_3dgs[mask]
-    vertex_data_3dgs = vertex_data_3dgs[mask]
-    
-    num_points_pruned = num_points_before - len(points_3dgs)
-    print(f"Density Pruning: Before {num_points_before} points, Pruned {num_points_pruned} points, After {len(points_3dgs)} points")
-    return points_3dgs, normals_3dgs, vertex_data_3dgs
-
-def prune_3dgs_by_normals(points_3dgs, normals_3dgs, vertex_data_3dgs, k_neighbors=10, cos_threshold=0.8):
-    """
-    법선 기반 Pruning.
-    
-    Args:
-        points_3dgs (np.ndarray): 3DGS 점 좌표 (N, 3).
-        normals_3dgs (np.ndarray): 3DGS 점 법선 (N, 3).
-        vertex_data_3dgs (PlyData): 3DGS 점의 원본 데이터.
-        k_neighbors (int): 고려할 이웃 점 개수.
-        cos_threshold (float): 코사인 유사도 임계값.
-    
-    Returns:
-        tuple: Pruning된 (points_3dgs, normals_3dgs, vertex_data_3dgs).
-    """
-    num_points_before = len(points_3dgs)
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points_3dgs)
-    tree = o3d.geometry.KDTreeFlann(pcd)
-    
-    mask = np.ones(len(points_3dgs), dtype=bool)
-    for i, point in enumerate(points_3dgs):
-        [k, idx, _] = tree.search_knn_vector_3d(point, k_neighbors)
-        if k < k_neighbors:
-            mask[i] = False
-            continue
-        
-        # 주변 점들의 법선과 코사인 유사도 계산
-        normal = normals_3dgs[i]
-        neighbor_normals = normals_3dgs[idx]
-        cos_sim = np.abs(np.dot(neighbor_normals, normal) / (np.linalg.norm(neighbor_normals, axis=1) * np.linalg.norm(normal) + 1e-8))
-        if np.mean(cos_sim) < cos_threshold:
-            mask[i] = False
-    
-    points_3dgs = points_3dgs[mask]
-    normals_3dgs = normals_3dgs[mask]
-    vertex_data_3dgs = vertex_data_3dgs[mask]
-    
-    num_points_pruned = num_points_before - len(points_3dgs)
-    print(f"Normal Pruning: Before {num_points_before} points, Pruned {num_points_pruned} points, After {len(points_3dgs)} points")
-    return points_3dgs, normals_3dgs, vertex_data_3dgs
 
 def prune_3dgs_by_pointcept_distance(points_3dgs, normals_3dgs, vertex_data_3dgs, points_pointcept, max_distance=0.2):
     """
@@ -174,6 +67,33 @@ def prune_3dgs_by_sor(points_3dgs, normals_3dgs, sor_nb_neighbors=20, sor_std_ra
     mask[ind] = False  # 제거된 점: True, 유지된 점: False
     return np.asarray(pcd_3dgs.points), np.asarray(pcd_3dgs.normals), mask
 
+
+def prune_by_pointcept_distance(points_3dgs, points_pointcept, pdistance_max=0.00008):
+    """
+    Prune 3DGS points based on distance to the nearest Pointcept point.
+    
+    Args:
+        points_3dgs (np.ndarray): 3DGS points [N, 3].
+        points_pointcept (np.ndarray): Pointcept points [M, 3].
+        pdistance_max (float): Maximum allowed distance to the nearest Pointcept point (squared distance).
+    
+    Returns:
+        np.ndarray: Boolean mask indicating which 3DGS points to keep.
+    """
+    num_points_before = len(points_3dgs)
+    pcd_pointcept = o3d.geometry.PointCloud()
+    pcd_pointcept.points = o3d.utility.Vector3dVector(points_pointcept)
+    tree = o3d.geometry.KDTreeFlann(pcd_pointcept)
+    
+    # 각 3DGS 포인트에서 가장 가까운 Pointcept 포인트까지의 제곱 거리 계산
+    distances = np.array([tree.search_knn_vector_3d(point, 1)[2][0] for point in points_3dgs])
+    
+    # 제곱 거리 기준으로 Pruning
+    mask = distances <= pdistance_max
+    
+    num_points_pruned = num_points_before - np.sum(mask)
+    print(f"Pointcept Distance Pruning: Before {num_points_before} points, Pruned {num_points_pruned} points with squared distance > {pdistance_max:.5f}, After {np.sum(mask)} points")
+    return mask
 def prune_3dgs(vertex_data_3dgs, points_3dgs, normals_3dgs, points_pointcept, normals_pointcept, prune_methods, prune_params):
     """
     3DGS 점에 대해 다양한 pruning 방법을 적용.
@@ -203,7 +123,7 @@ def prune_3dgs(vertex_data_3dgs, points_3dgs, normals_3dgs, points_pointcept, no
         distances = np.array([tree.search_knn_vector_3d(point, 1)[2][0] for point in points_3dgs])
         distance_mask = distances <= prune_params['pointcept_max_distance']
         mask = mask & distance_mask
-        print(f"Pointcept Distance Pruning: Before {len(points_3dgs)} points, Pruned {np.sum(~distance_mask)} points with distance > {prune_params['pointcept_max_distance']:.4f}, After {np.sum(mask)} points")
+        print(f"Pointcept Distance Pruning: Before {len(points_3dgs)} points, Pruned {np.sum(~distance_mask)} points with distance > {prune_params['pointcept_max_distance']:.5f}, After {np.sum(mask)} points")
     
     # Pointcept Distance Pruning 후 점 업데이트
     points_3dgs = points_3dgs[mask]
