@@ -68,20 +68,20 @@ def load_3dgs_data(path_3dgs):
     norm_3dgs = np.linalg.norm(normals_3dgs, axis=-1)
     print(f"3DGS normals norm: min={norm_3dgs.min():.4f}, max={norm_3dgs.max():.4f}, zero_count={np.sum(norm_3dgs == 0)}")
     
-    # 법선이 모두 0인 경우 추정
-    if np.all(norm_3dgs == 0):
-        print("All 3DGS normals are zero. Estimating normals...")
-        pcd_3dgs = o3d.geometry.PointCloud()
-        pcd_3dgs.points = o3d.utility.Vector3dVector(points_3dgs)
-        pcd_3dgs.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=20))
-        normals_3dgs = np.asarray(pcd_3dgs.normals)
-        norm_3dgs = np.linalg.norm(normals_3dgs, axis=-1)
-        print(f"After estimation - 3DGS normals norm: min={norm_3dgs.min():.4f}, max={norm_3dgs.max():.4f}, zero_count={np.sum(norm_3dgs == 0)}")
+    # # 법선이 모두 0인 경우 추정
+    # if np.all(norm_3dgs == 0):
+    #     print("All 3DGS normals are zero. Estimating normals...")
+    #     pcd_3dgs = o3d.geometry.PointCloud()
+    #     pcd_3dgs.points = o3d.utility.Vector3dVector(points_3dgs)
+    #     pcd_3dgs.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=20))
+    #     normals_3dgs = np.asarray(pcd_3dgs.normals)
+    #     norm_3dgs = np.linalg.norm(normals_3dgs, axis=-1)
+    #     print(f"After estimation - 3DGS normals norm: min={norm_3dgs.min():.4f}, max={norm_3dgs.max():.4f}, zero_count={np.sum(norm_3dgs == 0)}")
     
     print(f"Loaded 3DGS data from {path_3dgs}: {points_3dgs.shape[0]} points")
     return points_3dgs, normals_3dgs, vertex_data_3dgs
 
-def update_3dgs_attributes(points_3dgs, points_pointcept, colors_pointcept, labels_pointcept, labels200_pointcept, instances_pointcept, k_neighbors=5, use_label_consistency=True, ignore_threshold=0.6):
+def update_3dgs_attributes(points_3dgs, points_pointcept, colors_pointcept, normals_pointcept, labels_pointcept, labels200_pointcept, instances_pointcept, k_neighbors=5, use_label_consistency=True, ignore_threshold=0.6):
     """
     3DGS 점의 속성을 Pointcept 점에서 복사.
     
@@ -89,6 +89,7 @@ def update_3dgs_attributes(points_3dgs, points_pointcept, colors_pointcept, labe
         points_3dgs (np.ndarray): 3DGS 점 좌표.
         points_pointcept (np.ndarray): Pointcept 점 좌표.
         colors_pointcept (np.ndarray): Pointcept 점 색상.
+        normals_pointcept (np.ndarray): Pointcept 점 법선 벡터.
         labels_pointcept (np.ndarray): Pointcept 점 segment20 라벨.
         labels200_pointcept (np.ndarray): Pointcept 점 segment200 라벨.
         instances_pointcept (np.ndarray): Pointcept 점 instance ID.
@@ -97,14 +98,15 @@ def update_3dgs_attributes(points_3dgs, points_pointcept, colors_pointcept, labe
         ignore_threshold (float): ignore_index(-1) 라벨의 비율이 이 값 이상이면 결과 라벨을 -1로 설정.
     
     Returns:
-        tuple: (colors_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, mask)
+        tuple: (colors_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, mask)
     """
     # KNN을 사용하여 가장 가까운 Pointcept 점 찾기
     nbrs = NearestNeighbors(n_neighbors=k_neighbors, algorithm='auto').fit(points_pointcept)
     distances, indices = nbrs.kneighbors(points_3dgs)
 
-    # 색상, 라벨, instance 초기화
+    # 색상, 법선, 라벨, instance 초기화
     colors_3dgs = np.zeros((len(points_3dgs), 3), dtype=np.uint8)
+    normals_3dgs = np.zeros((len(points_3dgs), 3), dtype=np.float32)  # 법선 벡터 초기화
     labels_3dgs = np.full(len(points_3dgs), -1, dtype=np.int64)  # ignore_index로 초기화
     labels200_3dgs = np.full(len(points_3dgs), -1, dtype=np.int64)  # ignore_index로 초기화
     instances_3dgs = np.full(len(points_3dgs), -1, dtype=np.int64)  # ignore_index로 초기화
@@ -112,12 +114,18 @@ def update_3dgs_attributes(points_3dgs, points_pointcept, colors_pointcept, labe
 
     for i in range(len(points_3dgs)):
         nearest_colors = colors_pointcept[indices[i]]
+        nearest_normals = normals_pointcept[indices[i]]
         nearest_labels = labels_pointcept[indices[i]]
         nearest_labels200 = labels200_pointcept[indices[i]]
         nearest_instances = instances_pointcept[indices[i]]
 
         # 색상은 평균으로 계산
         colors_3dgs[i] = np.mean(nearest_colors, axis=0).astype(np.uint8)
+
+        # 법선은 평균으로 계산 (단위 벡터로 정규화)
+        avg_normal = np.mean(nearest_normals, axis=0)
+        norm = np.linalg.norm(avg_normal)
+        normals_3dgs[i] = avg_normal / norm if norm > 0 else avg_normal  # 0 벡터 방지
 
         # ignore_index(-1)의 비율 계산
         ignore_ratio_labels = np.mean(nearest_labels == -1)
@@ -153,7 +161,7 @@ def update_3dgs_attributes(points_3dgs, points_pointcept, colors_pointcept, labe
             if label_counts.max() < k_neighbors * 0.6:  # 60% 이상 일관성 없으면 제외
                 mask[i] = False
 
-    return colors_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, mask
+    return colors_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, mask
 
 def remove_duplicates(points_3dgs, points_pointcept, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs):
     """
@@ -184,6 +192,81 @@ def remove_duplicates(points_3dgs, points_pointcept, normals_3dgs, labels_3dgs, 
     instances_3dgs = instances_3dgs[mask]
     colors_3dgs = colors_3dgs[mask]
     return points_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs
+
+def voxelize_3dgs(points_3dgs, normals_3dgs, vertex_data_3dgs=None, voxel_size=0.02, k_neighbors=5):
+    """
+    3DGS 데이터를 Voxelization하여 노이즈와 비구조적 특성을 완화 (Open3D 활용).
+    
+    Args:
+        points_3dgs (np.ndarray): 3DGS 점 좌표 (N, 3).
+        normals_3dgs (np.ndarray): 3DGS 점 법선 (N, 3).
+        vertex_data_3dgs: 3DGS PLY 파일의 vertex 데이터 (옵션).
+        voxel_size (float): Voxel 크기 (기본값: 0.02m).
+        k_neighbors (int): 속성 및 법선 평균화 시 사용할 이웃 점 개수 (기본값: 5).
+    
+    Returns:
+        tuple: (points_voxelized, normals_voxelized, vertex_data_voxelized).
+    """
+    print(f"Voxelizing 3DGS points with voxel_size={voxel_size}...")
+    num_points_before = len(points_3dgs)
+
+    # Open3D PointCloud 객체 생성
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points_3dgs)
+    pcd.normals = o3d.utility.Vector3dVector(normals_3dgs)
+
+    # Open3D를 사용한 Voxelization
+    pcd_voxelized = pcd.voxel_down_sample(voxel_size=voxel_size)
+    points_voxelized = np.asarray(pcd_voxelized.points, dtype=np.float32)
+
+    # 원본 점과 Voxelized 점 간의 매핑 계산
+    pcd_original = o3d.geometry.PointCloud()
+    pcd_original.points = o3d.utility.Vector3dVector(points_3dgs)
+    tree = o3d.geometry.KDTreeFlann(pcd_original)
+    indices = []
+    for point in points_voxelized:
+        _, idx, _ = tree.search_knn_vector_3d(point, k_neighbors)  # k_neighbors개의 이웃 점 인덱스
+        indices.append(idx)
+    indices = np.array(indices)  # (N_voxelized, k_neighbors)
+
+    # 법선 평균화
+    normals_voxelized = np.mean(normals_3dgs[indices], axis=1, dtype=np.float32)
+    # 법선 정규화
+    norms = np.linalg.norm(normals_voxelized, axis=1, keepdims=True)
+    normals_voxelized = np.divide(normals_voxelized, norms, where=norms > 0, out=normals_voxelized)
+
+    # Voxelization 후 vertex_data_3dgs 처리
+    vertex_data_voxelized = None
+    if vertex_data_3dgs is not None:
+        # 필요한 속성만 추출 (opacity, scale, rotation)
+        attrs_to_keep = ['opacity', 'scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3']
+        attr_values = {
+            attr: np.mean(vertex_data_3dgs[attr][indices], axis=1) for attr in attrs_to_keep
+        }
+
+        # PlyElement의 dtype 정의 (x, y, z, nx, ny, nz 포함)
+        dtype_list = [
+            ('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
+            ('nx', 'f4'), ('ny', 'f4'), ('nz', 'f4'),
+            ('opacity', 'f4'),
+            ('scale_0', 'f4'), ('scale_1', 'f4'), ('scale_2', 'f4'),
+            ('rot_0', 'f4'), ('rot_1', 'f4'), ('rot_2', 'f4'), ('rot_3', 'f4')
+        ]
+
+        # NumPy 배열 생성
+        vertex_data_voxelized = np.zeros(len(points_voxelized), dtype=dtype_list)
+        vertex_data_voxelized['x'] = points_voxelized[:, 0]
+        vertex_data_voxelized['y'] = points_voxelized[:, 1]
+        vertex_data_voxelized['z'] = points_voxelized[:, 2]
+        vertex_data_voxelized['nx'] = normals_voxelized[:, 0]
+        vertex_data_voxelized['ny'] = normals_voxelized[:, 1]
+        vertex_data_voxelized['nz'] = normals_voxelized[:, 2]
+        # 속성 값 설정
+        for attr in attrs_to_keep:
+            vertex_data_voxelized[attr] = attr_values[attr]
+
+    print(f"Voxelization complete: Before {num_points_before} points, After {len(points_voxelized)} points")
+    return points_voxelized, normals_voxelized, vertex_data_voxelized
 
 def save_ply(points, colors, labels, output_path, save_separate_labels=False, points_pointcept=None, colors_pointcept=None, points_3dgs=None):
     """

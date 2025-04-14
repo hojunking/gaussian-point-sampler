@@ -7,14 +7,6 @@ import open3d as o3d
 from plyfile import PlyData, PlyElement
 
 
-import numpy as np
-import argparse
-import json
-from pruning import prune_3dgs
-from utils import load_pointcept_data, load_3dgs_data, update_3dgs_attributes, remove_duplicates, save_ply
-import os
-from plyfile import PlyData, PlyElement
-
 def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_methods=None, prune_params=None, k_neighbors=5, use_label_consistency=True, ignore_threshold=0.6, filter_ignore_label=False):
     """
     Pointcept Point Cloud와 3DGS Point Cloud를 병합하고 PLY 파일로 저장.
@@ -49,9 +41,9 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_m
         vertex_data_3dgs, points_3dgs, normals_3dgs, points_pointcept, normals_pointcept, prune_methods, prune_params
     )
 
-    # 4. 3DGS 점의 색상과 라벨을 복사
-    colors_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, mask = update_3dgs_attributes(
-        points_3dgs, points_pointcept, colors_pointcept, labels_pointcept, labels200_pointcept, instances_pointcept,
+    # 4. 3DGS 점의 색상, 법선, 라벨을 복사
+    colors_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, mask = update_3dgs_attributes(
+        points_3dgs, points_pointcept, colors_pointcept, normals_pointcept, labels_pointcept, labels200_pointcept, instances_pointcept,
         k_neighbors=k_neighbors, use_label_consistency=use_label_consistency, ignore_threshold=ignore_threshold
     )
 

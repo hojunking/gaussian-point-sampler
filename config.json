@@ -2,8 +2,7 @@
     "prune_params": {
       "density_eps": 0.05,
       "density_min_points": 50,
-      "pdistance_max": 0.005,
-      "pointcept_max_distance":0.001,
+      "pointcept_max_distance":0.0005,
       "normal_k_neighbors": 5,
       "normal_cos_threshold": 0.9,
       "sor_nb_neighbors": 40,

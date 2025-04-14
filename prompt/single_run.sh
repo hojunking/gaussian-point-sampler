@@ -3,23 +3,72 @@
 #     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
 #     --output_root /home/knuvi/Desktop/song/gaussian-point-sampler/test/test_samples10 \
 #     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-#     --scale_ratio 0 \
+#     --scale_ratio 0.5 \
+#     --opacity_ratio 0 \
+#     --k_neighbors 5 \
+#     --enable_pointcept_distance \
+#     --use_label_consistency \
+#     --exp scale050_pditance0001
+
+# python single_sample_3dgs_test.py \
+#     --scene scene0011_00 \
+#     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#     --output_root /home/knuvi/Desktop/song/gaussian-point-sampler/test/test_samples10 \
+#     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#     --scale_ratio 0.5 \
 #     --opacity_ratio 0.5 \
 #     --k_neighbors 5 \
+#     --enable_pointcept_distance \
 #     --use_label_consistency \
-#     --exp opacity50
+#     --exp pdistance00005_scale050_opacity050_t2
 
 python single_sample_3dgs_test.py \
     --scene scene0011_00 \
     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
     --output_root /home/knuvi/Desktop/song/gaussian-point-sampler/test/test_samples10 \
     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-    --scale_ratio 0 \
-    --opacity_ratio 0 \
+    --scale_ratio 0.5 \
+    --opacity_ratio 0.5 \
     --k_neighbors 5 \
-    --use_label_consistency \
     --enable_pointcept_distance \
-    --exp pdistance0001 \
+    --use_label_consistency \
+    --exp pdistance00005_scale075_opacity050_t2
+
+# python single_sample_3dgs_test.py \
+#     --scene scene0011_00 \
+#     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#     --output_root /home/knuvi/Desktop/song/gaussian-point-sampler/test/test_samples10 \
+#     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#     --scale_ratio 0.75 \
+#     --opacity_ratio 0.5 \
+#     --k_neighbors 5 \
+#     --enable_pointcept_distance \
+#     --use_label_consistency \
+#     --exp pdistance00005_scale050_opacity075
+
+# python single_sample_3dgs_test.py \
+#     --scene scene0011_00 \
+#     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#     --output_root /home/knuvi/Desktop/song/gaussian-point-sampler/test/test_samples10 \
+#     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#     --scale_ratio 0 \
+#     --opacity_ratio 0.5 \
+#     --k_neighbors 5 \
+#     --use_label_consistency \
+#     --exp opacity05_t2 \
+#     --enable_pointcept_distance 
+
+# python single_sample_3dgs_test.py \
+#     --scene scene0011_00 \
+#     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#     --output_root /home/knuvi/Desktop/song/gaussian-point-sampler/test/test_samples10 \
+#     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#     --scale_ratio 0 \
+#     --opacity_ratio 0 \
+#     --k_neighbors 5 \
+#     --use_label_consistency \
+#     --enable_pointcept_distance \
+#     --exp pdistance0001 \
 
 # python single_sample_3dgs_test.py \
 #     --scene scene0011_00 \

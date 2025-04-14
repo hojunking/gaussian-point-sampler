@@ -5,103 +5,112 @@
 # Python 실행 환경 설정 (필요 시 수정)
 PYTHON_EXEC=python3
 
-# # 기본 실행 명령어
-# $PYTHON_EXEC merge_3dgs_point_cloud.py \
-#     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-#     --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance_max00002 \
-#     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-#     --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-#     --scale_ratio 0 \
-#     --opacity_ratio 0 \
-#     --k_neighbors 5 \
-#     --use_label_consistency \
-#     --enable_pointcept_distance \
-
-# # 기본 실행 명령어
-# $PYTHON_EXEC merge_3dgs_point_cloud.py \
-#     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-#     --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance_max00002_label-knn10 \
-#     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-#     --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-#     --scale_ratio 0 \
-#     --opacity_ratio 0 \
-#     --k_neighbors 10 \
-#     --use_label_consistency \
-#     --enable_pointcept_distance \
-
+# 기본 실행 명령어
 $PYTHON_EXEC merge_3dgs_point_cloud.py \
     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-    --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance_max000001 \
+    --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance0001_scale05_vox002 \
     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
     --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-    --scale_ratio 0 \
+    --scale_ratio 0.5 \
     --opacity_ratio 0 \
     --k_neighbors 5 \
     --use_label_consistency \
     --enable_pointcept_distance \
-# 기본 실행 명령어
+    --pdistance 0.001 \
+    --voxelize \
+    --voxel_size 0.02
+
+
+$PYTHON_EXEC merge_3dgs_point_cloud.py \
+    --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+    --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance00005_scale05_vox002 \
+    --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+    --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+    --scale_ratio 0.5 \
+    --opacity_ratio 0 \
+    --k_neighbors 5 \
+    --use_label_consistency \
+    --enable_pointcept_distance \
+    --pdistance 0.0005 \
+    --voxelize \
+    --voxel_size 0.02
+
+$PYTHON_EXEC merge_3dgs_point_cloud.py \
+    --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+    --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance0005_scale05_vox002 \
+    --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+    --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+    --scale_ratio 0.5 \
+    --opacity_ratio 0 \
+    --k_neighbors 5 \
+    --use_label_consistency \
+    --enable_pointcept_distance \
+    --pdistance 0.005 \
+    --voxelize \
+    --voxel_size 0.02
+
 # $PYTHON_EXEC merge_3dgs_point_cloud.py \
 #     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-#     --output_root /home/knuvi/Desktop/song/Pointcept/data/opacity05 \
+#     --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance00005_scale075_opacity05_keep-dup \
 #     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
 #     --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-#     --scale_ratio 0 \
+#     --scale_ratio 0.75 \
 #     --opacity_ratio 0.5 \
 #     --k_neighbors 5 \
 #     --use_label_consistency \
- #   --enable_pointcept_distance \
+#     --enable_pointcept_distance \
+#     --pdistance 0.0005 \
+
+
+# $PYTHON_EXEC merge_3dgs_point_cloud.py \
+#     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#     --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance00005_scale05_opacity05_keep-dup \
+#     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#     --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#     --scale_ratio 0.5 \
+#     --opacity_ratio 0.5 \
+#     --k_neighbors 5 \
+#     --use_label_consistency \
+#     --enable_pointcept_distance \
+#     --pdistance 0.0005 \
+
+
 
 # 기본 실행 명령어
 # $PYTHON_EXEC merge_3dgs_point_cloud.py \
 #     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-#     --output_root /home/knuvi/Desktop/song/Pointcept/data/opacity75 \
-#     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-#     --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-#     --scale_ratio 0 \
-#     --opacity_ratio 0.75 \
-#     --k_neighbors 5 \
-#     --use_label_consistency \
-#    --enable_pointcept_distance \
-# $PYTHON_EXEC merge_3dgs_point_cloud.py \
-#     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-#     --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance_max0001 \
-#     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-#     --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-#     --scale_ratio 0 \
-#     --opacity_ratio 0 \
-#     --k_neighbors 5 \
-#     --use_label_consistency \
-#     --enable_pointcept_distance \
-    #  --enable_sor \
-    #--enable_normal \
-# $PYTHON_EXEC merge_3dgs_point_cloud.py \
-#     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-#     --output_root /home/knuvi/Desktop/song/Pointcept/data/scale05 \
+#     --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance0001_scale05 \
 #     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
 #     --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
 #     --scale_ratio 0.5 \
 #     --opacity_ratio 0 \
 #     --k_neighbors 5 \
 #     --use_label_consistency \
+#     --enable_pointcept_distance \
+#     --pdistance 0.001 \
+
 
 # $PYTHON_EXEC merge_3dgs_point_cloud.py \
 #     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-#     --output_root /home/knuvi/Desktop/song/Pointcept/data/scale075 \
+#     --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance0001_scale075_opacity05 \
 #     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
 #     --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
 #     --scale_ratio 0.75 \
-#     --opacity_ratio 0 \
-#     --k_neighbors 5 \
-#     --use_label_consistency \
-#    --enable_pointcept_distance \
-# $PYTHON_EXEC merge_3dgs_point_cloud.py \
-#     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-#     --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance_max00005 \
-#     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-#     --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-#     --scale_ratio 0 \
-#     --opacity_ratio 0 \
+#     --opacity_ratio 0.5 \
 #     --k_neighbors 5 \
 #     --use_label_consistency \
 #     --enable_pointcept_distance \
-#     --num_workers 3
+#     --pdistance 0.001 \
+
+
+# $PYTHON_EXEC merge_3dgs_point_cloud.py \
+#     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#     --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance0001_scale05_opacity05 \
+#     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#     --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#     --scale_ratio 0.5 \
+#     --opacity_ratio 0.5 \
+#     --k_neighbors 5 \
+#     --use_label_consistency \
+#     --enable_pointcept_distance \
+#     --pdistance 0.001 \

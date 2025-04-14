@@ -37,7 +37,7 @@ def merge_pointcept_with_3dgs_attributes(pointcept_dir, path_3dgs, output_dir, p
 
         # 3. 3DGS 점 pruning (Pointcept-Distance 기반)
         if prune_methods.get('pointcept_distance', False):
-            pdistance_max = prune_params.get('pdistance_max', 0.00008)
+            pdistance_max = prune_params.get('pointcept_distance', 0.00008)
             mask = prune_by_pointcept_distance(points_3dgs, points_pointcept, pdistance_max=pdistance_max)
             points_3dgs = points_3dgs[mask]
             features_3dgs = features_3dgs[mask]
