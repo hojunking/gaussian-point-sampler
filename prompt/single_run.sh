@@ -28,11 +28,14 @@ python single_sample_3dgs_test.py \
     --output_root /home/knuvi/Desktop/song/gaussian-point-sampler/test/test_samples10 \
     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
     --scale_ratio 0.5 \
-    --opacity_ratio 0.5 \
+    --opacity_ratio 0 \
     --k_neighbors 5 \
     --enable_pointcept_distance \
     --use_label_consistency \
-    --exp pdistance00005_scale075_opacity050_t2
+    --pdistance 0.0005 \
+    --voxelize \
+    --voxel_size 0.02 \
+    --exp pdistance00005_scale05_vox002
 
 # python single_sample_3dgs_test.py \
 #     --scene scene0011_00 \

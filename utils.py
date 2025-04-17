@@ -68,15 +68,15 @@ def load_3dgs_data(path_3dgs):
     norm_3dgs = np.linalg.norm(normals_3dgs, axis=-1)
     print(f"3DGS normals norm: min={norm_3dgs.min():.4f}, max={norm_3dgs.max():.4f}, zero_count={np.sum(norm_3dgs == 0)}")
     
-    # # 법선이 모두 0인 경우 추정
-    # if np.all(norm_3dgs == 0):
-    #     print("All 3DGS normals are zero. Estimating normals...")
-    #     pcd_3dgs = o3d.geometry.PointCloud()
-    #     pcd_3dgs.points = o3d.utility.Vector3dVector(points_3dgs)
-    #     pcd_3dgs.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=20))
-    #     normals_3dgs = np.asarray(pcd_3dgs.normals)
-    #     norm_3dgs = np.linalg.norm(normals_3dgs, axis=-1)
-    #     print(f"After estimation - 3DGS normals norm: min={norm_3dgs.min():.4f}, max={norm_3dgs.max():.4f}, zero_count={np.sum(norm_3dgs == 0)}")
+    # 법선이 모두 0인 경우 추정
+    if np.all(norm_3dgs == 0):
+        print("All 3DGS normals are zero. Estimating normals...")
+        pcd_3dgs = o3d.geometry.PointCloud()
+        pcd_3dgs.points = o3d.utility.Vector3dVector(points_3dgs)
+        pcd_3dgs.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=20))
+        normals_3dgs = np.asarray(pcd_3dgs.normals)
+        norm_3dgs = np.linalg.norm(normals_3dgs, axis=-1)
+        print(f"After estimation - 3DGS normals norm: min={norm_3dgs.min():.4f}, max={norm_3dgs.max():.4f}, zero_count={np.sum(norm_3dgs == 0)}")
     
     print(f"Loaded 3DGS data from {path_3dgs}: {points_3dgs.shape[0]} points")
     return points_3dgs, normals_3dgs, vertex_data_3dgs
@@ -193,7 +193,7 @@ def remove_duplicates(points_3dgs, points_pointcept, normals_3dgs, labels_3dgs, 
     colors_3dgs = colors_3dgs[mask]
     return points_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs
 
-def voxelize_3dgs(points_3dgs, normals_3dgs, vertex_data_3dgs=None, voxel_size=0.02, k_neighbors=5):
+def voxelize_3dgs(points_3dgs, normals_3dgs, vertex_data_3dgs, features_3dgs, voxel_size=0.02, k_neighbors=5):
     """
     3DGS 데이터를 Voxelization하여 노이즈와 비구조적 특성을 완화 (Open3D 활용).
     
@@ -201,11 +201,12 @@ def voxelize_3dgs(points_3dgs, normals_3dgs, vertex_data_3dgs=None, voxel_size=0
         points_3dgs (np.ndarray): 3DGS 점 좌표 (N, 3).
         normals_3dgs (np.ndarray): 3DGS 점 법선 (N, 3).
         vertex_data_3dgs: 3DGS PLY 파일의 vertex 데이터 (옵션).
+        features_3dgs (np.ndarray): 전처리된 3DGS 속성 [N, 7] (scale_x, scale_y, scale_z, opacity, dir_x, dir_y, dir_z).
         voxel_size (float): Voxel 크기 (기본값: 0.02m).
         k_neighbors (int): 속성 및 법선 평균화 시 사용할 이웃 점 개수 (기본값: 5).
     
     Returns:
-        tuple: (points_voxelized, normals_voxelized, vertex_data_voxelized).
+        tuple: (points_voxelized, normals_voxelized, vertex_data_voxelized, features_voxelized).
     """
     print(f"Voxelizing 3DGS points with voxel_size={voxel_size}...")
     num_points_before = len(points_3dgs)
@@ -229,44 +230,37 @@ def voxelize_3dgs(points_3dgs, normals_3dgs, vertex_data_3dgs=None, voxel_size=0
         indices.append(idx)
     indices = np.array(indices)  # (N_voxelized, k_neighbors)
 
-    # 법선 평균화
+    # 법선 평균화 및 정규화
     normals_voxelized = np.mean(normals_3dgs[indices], axis=1, dtype=np.float32)
-    # 법선 정규화
     norms = np.linalg.norm(normals_voxelized, axis=1, keepdims=True)
     normals_voxelized = np.divide(normals_voxelized, norms, where=norms > 0, out=normals_voxelized)
 
-    # Voxelization 후 vertex_data_3dgs 처리
+    # 전처리된 속성 평균화
+    features_voxelized = np.zeros((len(points_voxelized), features_3dgs.shape[1]), dtype=np.float32)
+    for i in range(len(points_voxelized)):
+        features_voxelized[i] = np.mean(features_3dgs[indices[i]], axis=0)
+
+    # 방향 벡터 (rotation) 정규화
+    if features_voxelized.shape[1] >= 7:  # features_3dgs: [scale_x, scale_y, scale_z, opacity, dir_x, dir_y, dir_z]
+        rotation_voxelized = features_voxelized[:, 4:7]  # dir_x, dir_y, dir_z
+        rotation_norms = np.linalg.norm(rotation_voxelized, axis=1, keepdims=True)
+        features_voxelized[:, 4:7] = np.divide(rotation_voxelized, rotation_norms, where=rotation_norms > 0, out=rotation_voxelized)
+
+    # vertex_data_3dgs 처리 (평균화)
     vertex_data_voxelized = None
     if vertex_data_3dgs is not None:
-        # 필요한 속성만 추출 (opacity, scale, rotation)
-        attrs_to_keep = ['opacity', 'scale_0', 'scale_1', 'scale_2', 'rot_0', 'rot_1', 'rot_2', 'rot_3']
-        attr_values = {
-            attr: np.mean(vertex_data_3dgs[attr][indices], axis=1) for attr in attrs_to_keep
-        }
-
-        # PlyElement의 dtype 정의 (x, y, z, nx, ny, nz 포함)
-        dtype_list = [
-            ('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
-            ('nx', 'f4'), ('ny', 'f4'), ('nz', 'f4'),
-            ('opacity', 'f4'),
-            ('scale_0', 'f4'), ('scale_1', 'f4'), ('scale_2', 'f4'),
-            ('rot_0', 'f4'), ('rot_1', 'f4'), ('rot_2', 'f4'), ('rot_3', 'f4')
-        ]
-
-        # NumPy 배열 생성
-        vertex_data_voxelized = np.zeros(len(points_voxelized), dtype=dtype_list)
-        vertex_data_voxelized['x'] = points_voxelized[:, 0]
-        vertex_data_voxelized['y'] = points_voxelized[:, 1]
-        vertex_data_voxelized['z'] = points_voxelized[:, 2]
-        vertex_data_voxelized['nx'] = normals_voxelized[:, 0]
-        vertex_data_voxelized['ny'] = normals_voxelized[:, 1]
-        vertex_data_voxelized['nz'] = normals_voxelized[:, 2]
-        # 속성 값 설정
-        for attr in attrs_to_keep:
-            vertex_data_voxelized[attr] = attr_values[attr]
+        if isinstance(vertex_data_3dgs, dict):
+            vertex_data_voxelized = {}
+            for key in vertex_data_3dgs.keys():
+                vertex_data_voxelized[key] = np.zeros((len(points_voxelized), vertex_data_3dgs[key].shape[1]), dtype=np.float32)
+                for i in range(len(points_voxelized)):
+                    vertex_data_voxelized[key][i] = np.mean(vertex_data_3dgs[key][indices[i]], axis=0)
+        else:
+            print("Warning: vertex_data_3dgs is not a dict, skipping vertex data processing.")
+            vertex_data_voxelized = None
 
     print(f"Voxelization complete: Before {num_points_before} points, After {len(points_voxelized)} points")
-    return points_voxelized, normals_voxelized, vertex_data_voxelized
+    return points_voxelized, normals_voxelized, vertex_data_voxelized, features_voxelized
 
 def save_ply(points, colors, labels, output_path, save_separate_labels=False, points_pointcept=None, colors_pointcept=None, points_3dgs=None):
     """

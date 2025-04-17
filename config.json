@@ -1,11 +1,15 @@
 {
-    "prune_params": {
+  "prune_params": {
       "density_eps": 0.05,
       "density_min_points": 50,
-      "pointcept_max_distance":0.0005,
+      "pointcept_max_distance": 0.0005,
       "normal_k_neighbors": 5,
       "normal_cos_threshold": 0.9,
       "sor_nb_neighbors": 40,
-      "sor_std_ratio": 0.1
-    }
+      "sor_std_ratio": 0.1,
+      "scale_lower_threshold": 0.05,
+      "scale_upper_threshold": 0.9,
+      "opacity_lower_threshold": 0.05,
+      "opacity_upper_threshold": 0.9
   }
+}

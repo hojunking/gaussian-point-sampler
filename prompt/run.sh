@@ -8,7 +8,7 @@ PYTHON_EXEC=python3
 # 기본 실행 명령어
 $PYTHON_EXEC merge_3dgs_point_cloud.py \
     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-    --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance0001_scale05_vox002 \
+    --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance0001_scale05_vox004-l \
     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
     --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
     --scale_ratio 0.5 \
@@ -18,12 +18,12 @@ $PYTHON_EXEC merge_3dgs_point_cloud.py \
     --enable_pointcept_distance \
     --pdistance 0.001 \
     --voxelize \
-    --voxel_size 0.02
+    --voxel_size 0.04
 
 
 $PYTHON_EXEC merge_3dgs_point_cloud.py \
     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-    --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance00005_scale05_vox002 \
+    --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance00005_scale05_vox004-l \
     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
     --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
     --scale_ratio 0.5 \
@@ -33,11 +33,11 @@ $PYTHON_EXEC merge_3dgs_point_cloud.py \
     --enable_pointcept_distance \
     --pdistance 0.0005 \
     --voxelize \
-    --voxel_size 0.02
+    --voxel_size 0.04
 
 $PYTHON_EXEC merge_3dgs_point_cloud.py \
     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-    --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance0005_scale05_vox002 \
+    --output_root /home/knuvi/Desktop/song/Pointcept/data/pdistance0005_scale05_vox004-l \
     --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
     --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
     --scale_ratio 0.5 \
@@ -47,7 +47,7 @@ $PYTHON_EXEC merge_3dgs_point_cloud.py \
     --enable_pointcept_distance \
     --pdistance 0.005 \
     --voxelize \
-    --voxel_size 0.02
+    --voxel_size 0.04
 
 # $PYTHON_EXEC merge_3dgs_point_cloud.py \
 #     --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \

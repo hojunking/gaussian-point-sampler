@@ -110,19 +110,43 @@ def prune_3dgs(vertex_data_3dgs, points_3dgs, normals_3dgs, points_pointcept, no
     # 3. Scale-based Pruning
     if prune_methods.get('scale', False) and features_3dgs is not None:
         scales = features_3dgs[:, 0:3]  # 전처리된 scale 값 사용
-        scale_magnitudes = np.linalg.norm(scales, axis=-1)
-        threshold = np.percentile(scale_magnitudes, 100 * (1 - prune_methods['scale_ratio']))
-        scale_mask = scale_magnitudes <= threshold
-        mask = mask & scale_mask
-        print(f"Scale Pruning: Pruned {np.sum(~scale_mask)} points with scale > {threshold:.4f}, Remaining {np.sum(mask)} points")
+
+        # 상한값/하한값 기반 Pruning
+        scale_lower_threshold = prune_params.get('scale_lower_threshold', 0.01)
+        scale_upper_threshold = prune_params.get('scale_upper_threshold', 0.9)
+        scale_threshold_mask = np.all((scales >= scale_lower_threshold) & (scales <= scale_upper_threshold), axis=1)
+        mask = mask & scale_threshold_mask
+        print(f"Scale Threshold Pruning: Pruned {np.sum(~scale_threshold_mask)} points with scale outside [{scale_lower_threshold:.4f}, {scale_upper_threshold:.4f}], Remaining {np.sum(mask)} points")
+
+        # 추가적으로 ratio 기반 Pruning
+        if prune_methods.get('scale_ratio', 0.0) > 0:
+            scale_magnitudes = np.linalg.norm(scales[mask], axis=-1)
+            threshold = np.percentile(scale_magnitudes, 100 * (1 - prune_methods['scale_ratio']))
+            scale_ratio_mask = scale_magnitudes <= threshold
+            temp_mask = np.ones(len(mask), dtype=bool)
+            temp_mask[mask] = scale_ratio_mask
+            mask = mask & temp_mask
+            print(f"Scale Ratio Pruning: Pruned {np.sum(~scale_ratio_mask)} points with scale > {threshold:.4f}, Remaining {np.sum(mask)} points")
     
     # 4. Opacity-based Pruning
     if prune_methods.get('opacity', False) and features_3dgs is not None:
         opacities = features_3dgs[:, 3]  # 전처리된 opacity 값 사용
-        threshold = np.percentile(opacities, 100 * prune_methods['opacity_ratio'])
-        opacity_mask = opacities >= threshold
-        mask = mask & opacity_mask
-        print(f"Opacity Pruning: Pruned {np.sum(~opacity_mask)} points with opacity < {threshold:.4f}, Remaining {np.sum(mask)} points")
+
+        # 상한값/하한값 기반 Pruning
+        opacity_lower_threshold = prune_params.get('opacity_lower_threshold', 0.01)
+        opacity_upper_threshold = prune_params.get('opacity_upper_threshold', 0.9)
+        opacity_threshold_mask = (opacities >= opacity_lower_threshold) & (opacities <= opacity_upper_threshold)
+        mask = mask & opacity_threshold_mask
+        print(f"Opacity Threshold Pruning: Pruned {np.sum(~opacity_threshold_mask)} points with opacity outside [{opacity_lower_threshold:.4f}, {opacity_upper_threshold:.4f}], Remaining {np.sum(mask)} points")
+
+        # 추가적으로 ratio 기반 Pruning
+        if prune_methods.get('opacity_ratio', 0.0) > 0:
+            threshold = np.percentile(opacities[mask], 100 * prune_methods['opacity_ratio'])
+            opacity_ratio_mask = opacities[mask] >= threshold
+            temp_mask = np.ones(len(mask), dtype=bool)
+            temp_mask[mask] = opacity_ratio_mask
+            mask = mask & temp_mask
+            print(f"Opacity Ratio Pruning: Pruned {np.sum(~opacity_ratio_mask)} points with opacity < {threshold:.4f}, Remaining {np.sum(mask)} points")
     
     # 5. Density-based Pruning
     if prune_methods.get('density', False):

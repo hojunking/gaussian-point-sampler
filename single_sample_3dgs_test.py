@@ -1,13 +1,12 @@
 import numpy as np
 import argparse, json
 from pruning import prune_3dgs
-from utils import load_pointcept_data, load_3dgs_data, update_3dgs_attributes, remove_duplicates, save_ply
+from utils import load_pointcept_data, load_3dgs_data, update_3dgs_attributes, remove_duplicates, save_ply, voxelize_3dgs
 import os
-import open3d as o3d
-from plyfile import PlyData, PlyElement
 
 
-def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_methods=None, prune_params=None, k_neighbors=5, use_label_consistency=True, ignore_threshold=0.6, filter_ignore_label=False):
+def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_methods=None, prune_params=None, k_neighbors=5, use_label_consistency=True, ignore_threshold=0.6, filter_ignore_label=False, voxelize=True, voxel_size=0.02):
+
     """
     Pointcept Point Cloud와 3DGS Point Cloud를 병합하고 PLY 파일로 저장.
     
@@ -36,12 +35,20 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_m
     # 2. 3DGS 데이터 로드
     points_3dgs, normals_3dgs, vertex_data_3dgs = load_3dgs_data(path_3dgs)
 
-    # 3. 3DGS 점 pruning (normals_pointcept 전달)
+    # 3. 3DGS 데이터 Voxelization (옵션)
+    if voxelize:
+        points_3dgs, normals_3dgs, vertex_data_3dgs = voxelize_3dgs(
+            points_3dgs, normals_3dgs, vertex_data_3dgs, voxel_size=voxel_size
+        )
+    else:
+        print("Skipping Voxelization for 3DGS data.")
+
+    # 4. 3DGS 점 pruning (normals_pointcept 전달)
     points_3dgs, normals_3dgs, vertex_data_3dgs = prune_3dgs(
         vertex_data_3dgs, points_3dgs, normals_3dgs, points_pointcept, normals_pointcept, prune_methods, prune_params
     )
 
-    # 4. 3DGS 점의 색상, 법선, 라벨을 복사
+    # 5. 3DGS 점의 색상, 법선, 라벨을 복사
     colors_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, mask = update_3dgs_attributes(
         points_3dgs, points_pointcept, colors_pointcept, normals_pointcept, labels_pointcept, labels200_pointcept, instances_pointcept,
         k_neighbors=k_neighbors, use_label_consistency=use_label_consistency, ignore_threshold=ignore_threshold
@@ -55,24 +62,13 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_m
     labels200_3dgs = labels200_3dgs[mask]
     instances_3dgs = instances_3dgs[mask]
 
-    # 4.5. -1 라벨 3DGS 점 비율 출력
+    # 5.5. -1 라벨 3DGS 점 비율 출력
     ignore_count = np.sum(labels_3dgs == -1)
     total_count = len(labels_3dgs)
     ignore_ratio = ignore_count / total_count if total_count > 0 else 0
     print(f"3DGS points with label -1: {ignore_count}/{total_count} (Ratio: {ignore_ratio:.4f})")
 
-    # 4.6. -1 라벨 3DGS 점 필터링 (선택적)
-    if filter_ignore_label:
-        valid_mask = labels_3dgs != -1
-        points_3dgs = points_3dgs[valid_mask]
-        colors_3dgs = colors_3dgs[valid_mask]
-        normals_3dgs = normals_3dgs[valid_mask]
-        labels_3dgs = labels_3dgs[valid_mask]
-        labels200_3dgs = labels200_3dgs[valid_mask]
-        instances_3dgs = instances_3dgs[valid_mask]
-        print(f"Filtered {np.sum(~valid_mask)} 3DGS points with label -1")
-
-    # 5. 중복 점 제거 (3DGS 점 제거)
+    # 6. 중복 점 제거 (3DGS 점 제거)
     points_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs = remove_duplicates(
         points_3dgs, points_pointcept, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs
     )
@@ -102,7 +98,7 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_m
         save_separate_labels=False
     )
 
-def process_single_scene(scene, input_root, output_root, exp, path_3dgs_root, prune_methods, prune_params, k_neighbors=5, use_label_consistency=True):
+def process_single_scene(scene, input_root, output_root, exp, path_3dgs_root, prune_methods, prune_params, k_neighbors=5, use_label_consistency=True, voxelize=True, voxel_size=0.02):
     """
     단일 scene을 처리하는 함수.
     
@@ -134,7 +130,7 @@ def process_single_scene(scene, input_root, output_root, exp, path_3dgs_root, pr
         # 병합 및 PLY 파일로 저장
         merge_pointcept_with_3dgs(
             pointcept_dir, path_3dgs, output_dir, exp, prune_methods, prune_params,
-            k_neighbors=k_neighbors, use_label_consistency=use_label_consistency
+            k_neighbors=k_neighbors, use_label_consistency=use_label_consistency, voxelize=True, voxel_size=0.02
         )
     except Exception as e:
         print(f"Error processing scene {scene}: {e}")
@@ -210,6 +206,24 @@ if __name__ == "__main__":
         default="",
         help="Experiment name",
     )
+    parser.add_argument(
+        "--pdistance",
+        default=0.001,
+        type=float,
+        help="Pointcept distance threshold",
+    )
+    parser.add_argument(
+        "--voxelize",
+        action="store_true",
+        default=True,
+        help="Apply voxelization to 3DGS data (default: True)",
+    )
+    parser.add_argument(
+        "--voxel_size",
+        default=0.02,
+        type=float,
+        help="Voxel size for 3DGS voxelization (default: 0.02m)",
+    )
     args = parser.parse_args()
 
     # Pruning 방법 설정
@@ -224,11 +238,12 @@ if __name__ == "__main__":
         'sor': args.enable_sor
     }
 
-    # config.json에서 prune_params 로드
     config_path = './config.json'
     with open(config_path, 'r') as f:
         config = json.load(f)
     prune_params = config['prune_params']
+    prune_params['pointcept_max_distance'] = args.pdistance
+    print(f'Pointcept distance threshold: {prune_params["pointcept_max_distance"]}')
 
     # 단일 Scene 처리
     process_single_scene(
@@ -240,5 +255,7 @@ if __name__ == "__main__":
         prune_methods,
         prune_params,
         k_neighbors=args.k_neighbors,
-        use_label_consistency=args.use_label_consistency
+        use_label_consistency=args.use_label_consistency,
+        voxelize=args.voxelize,
+        voxel_size=args.voxel_size
     )
