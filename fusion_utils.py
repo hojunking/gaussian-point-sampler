@@ -41,11 +41,14 @@ def quaternion_to_direction(quaternion):
     # 방향 벡터 정규화
     norm = np.linalg.norm(directions, axis=1, keepdims=True)
     directions = np.divide(directions, norm, where=norm != 0, out=np.zeros_like(directions))
+    
+    # 0~1로 스케일링
+    directions = (directions + 1) / 2
     return directions
 
 def augment_pointcept_with_3dgs_attributes(points_pointcept, points_3dgs, features_3dgs, k_neighbors=5, use_features=('scale',)):
     """
-    Pointcept 점에 3DGS 속성을 전달 (KNN 사용).
+    Pointcept 점에 3DGS 속성을 전달 (KNN 사용)하고, features_3dgs도 필터링.
     
     Args:
         points_pointcept (np.ndarray): Pointcept 점 좌표 [M, 3].
@@ -55,48 +58,60 @@ def augment_pointcept_with_3dgs_attributes(points_pointcept, points_3dgs, featur
         use_features (tuple): 사용할 features ('scale', 'opacity', 'rotation').
     
     Returns:
-        np.ndarray: Pointcept 점에 전달된 속성 [M, D].
+        tuple: (augmented_features, filtered_features_3dgs)
+            - augmented_features (np.ndarray): Pointcept 점에 전달된 속성 [M, D].
+            - filtered_features_3dgs (np.ndarray): 필터링된 3DGS 속성 [N, D].
     """
     # KNN으로 이웃 찾기
     nbrs = NearestNeighbors(n_neighbors=k_neighbors, algorithm='auto').fit(points_3dgs)
     distances, indices = nbrs.kneighbors(points_pointcept)
 
     # 사용할 features 선택 (aggregation은 mean으로 고정)
-    selected_features = []
+    selected_features_pointcept = []
+    selected_features_3dgs = []
     feature_idx = 0
+
     if 'scale' in use_features:
-        # Scale 속성
+        # Scale 속성 (Pointcept에 전달)
         scale_3dgs = features_3dgs[:, feature_idx:feature_idx + 3]  # [N, 3]
         scale_neighbors = scale_3dgs[indices]  # [M, k_neighbors, 3]
         scale_augmented = np.mean(scale_neighbors, axis=1)  # [M, 3]
-        selected_features.append(scale_augmented)
+        selected_features_pointcept.append(scale_augmented)
+        # Scale 속성 (3DGS 필터링)
+        selected_features_3dgs.append(scale_3dgs)
         feature_idx += 3
 
     if 'opacity' in use_features:
-        # Opacity 속성
+        # Opacity 속성 (Pointcept에 전달)
         opacity_3dgs = features_3dgs[:, feature_idx:feature_idx + 1]  # [N, 1]
         opacity_neighbors = opacity_3dgs[indices]  # [M, k_neighbors, 1]
         opacity_augmented = np.mean(opacity_neighbors, axis=1)  # [M, 1]
-        selected_features.append(opacity_augmented)
+        selected_features_pointcept.append(opacity_augmented)
+        # Opacity 속성 (3DGS 필터링)
+        selected_features_3dgs.append(opacity_3dgs)
         feature_idx += 1
 
     if 'rotation' in use_features:
-        # Rotation 속성 (이미 방향 벡터로 변환된 상태)
+        # Rotation 속성 (Pointcept에 전달)
         rotation_3dgs = features_3dgs[:, feature_idx:feature_idx + 3]  # [N, 3]
         rotation_neighbors = rotation_3dgs[indices]  # [M, k_neighbors, 3]
         rotation_augmented = np.mean(rotation_neighbors, axis=1)  # [M, 3]
         # 방향 벡터 정규화
         norm = np.linalg.norm(rotation_augmented, axis=1, keepdims=True)
         rotation_augmented = np.divide(rotation_augmented, norm, where=norm != 0, out=np.zeros_like(rotation_augmented))
-        selected_features.append(rotation_augmented)
+        selected_features_pointcept.append(rotation_augmented)
+        # Rotation 속성 (3DGS 필터링)
+        selected_features_3dgs.append(rotation_3dgs)
 
     # 선택된 features 연결
-    if selected_features:
-        augmented_features = np.concatenate(selected_features, axis=-1)  # [M, D]
+    if selected_features_pointcept:
+        augmented_features = np.concatenate(selected_features_pointcept, axis=-1)  # [M, D]
+        filtered_features_3dgs = np.concatenate(selected_features_3dgs, axis=-1)  # [N, D]
     else:
         augmented_features = np.zeros((len(points_pointcept), 0), dtype=np.float32)
+        filtered_features_3dgs = np.zeros((len(points_3dgs), 0), dtype=np.float32)
 
-    return augmented_features
+    return augmented_features, filtered_features_3dgs
 
 def preprocess_3dgs_attributes(vertex_data_3dgs, normalize_scale=True):
     """
@@ -238,8 +253,8 @@ def prune_3dgs(vertex_data_3dgs, points_3dgs, normals_3dgs, features_3dgs, point
     # 2. Scale-based Pruning
     if prune_methods.get('scale', False) and features_3dgs is not None:
         scales = features_3dgs[:, 0:3]  # 전처리된 scale 값 사용
-        scale_lower_threshold = prune_params.get('scale_lower_threshold', 0.01)
-        scale_upper_threshold = prune_params.get('scale_upper_threshold', 0.9)
+        scale_lower_threshold = prune_params.get('scale_lower_threshold', 0.005)
+        scale_upper_threshold = prune_params.get('scale_upper_threshold', 0.95)
         scale_threshold_mask = np.all((scales >= scale_lower_threshold) & (scales <= scale_upper_threshold), axis=1)
         mask = mask & scale_threshold_mask
         print(f"Scale Threshold Pruning: Pruned {np.sum(~scale_threshold_mask)} points with scale outside [{scale_lower_threshold:.4f}, {scale_upper_threshold:.4f}], Remaining {np.sum(mask)} points")
@@ -256,8 +271,8 @@ def prune_3dgs(vertex_data_3dgs, points_3dgs, normals_3dgs, features_3dgs, point
     # 3. Opacity-based Pruning
     if prune_methods.get('opacity', False) and features_3dgs is not None:
         opacities = features_3dgs[:, 3]  # 전처리된 opacity 값 사용
-        opacity_lower_threshold = prune_params.get('opacity_lower_threshold', 0.01)
-        opacity_upper_threshold = prune_params.get('opacity_upper_threshold', 0.9)
+        opacity_lower_threshold = prune_params.get('opacity_lower_threshold', 0.05)
+        opacity_upper_threshold = prune_params.get('opacity_upper_threshold', 0.95)
         opacity_threshold_mask = (opacities >= opacity_lower_threshold) & (opacities <= opacity_upper_threshold)
         mask = mask & opacity_threshold_mask
         print(f"Opacity Threshold Pruning: Pruned {np.sum(~opacity_threshold_mask)} points with opacity outside [{opacity_lower_threshold:.4f}, {opacity_upper_threshold:.4f}], Remaining {np.sum(mask)} points")
@@ -349,3 +364,55 @@ def prune_3dgs(vertex_data_3dgs, points_3dgs, normals_3dgs, features_3dgs, point
     
     print(f"Final 3DGS points after pruning: {len(points_3dgs)} (Pruned {len(mask) - np.sum(mask)} points in total)")
     return points_3dgs, normals_3dgs, vertex_data_3dgs, features_3dgs
+
+
+def normalize_features_merged(features_merged, use_features=('scale', 'opacity', 'rotation'), 
+                             min_max_dict=None):
+    # features_merged가 비어있는 경우 처리
+    if features_merged.shape[1] == 0:
+        print("Warning: features_merged is empty. Returning as is.")
+        return features_merged
+
+    # 선택된 속성에 따른 차원 매핑
+    feature_dims = {'scale': 3, 'opacity': 1, 'rotation': 3}
+    expected_dim = sum(feature_dims[feat] for feat in use_features)
+    
+    # features_merged의 차원 확인
+    if features_merged.shape[1] != expected_dim:
+        raise ValueError(
+            f"features_merged의 차원({features_merged.shape[1]})이 use_features({use_features})에 따른 "
+            f"예상 차원({expected_dim})과 일치하지 않습니다."
+        )
+
+    # min_max_dict 확인
+    if min_max_dict is None:
+        raise ValueError("min_max_dict must be provided for constant-based scaling.")
+
+    # 속성별로 최대/최소값 추출
+    feature_idx = 0
+    min_values = []
+    max_values = []
+    
+    if 'scale' in use_features:
+        min_values.append(min_max_dict['scale_min'])
+        max_values.append(min_max_dict['scale_max'])
+        feature_idx += 3
+    if 'opacity' in use_features:
+        min_values.append(min_max_dict['opacity_min'])
+        max_values.append(min_max_dict['opacity_max'])
+        feature_idx += 1
+    if 'rotation' in use_features:
+        min_values.append(min_max_dict['rotation_min'])
+        max_values.append(min_max_dict['rotation_max'])
+    
+    # 최대/최소값 배열로 병합
+    min_values = np.concatenate(min_values, axis=0)  # [D]
+    max_values = np.concatenate(max_values, axis=0)  # [D]
+
+    # 스케일링 적용
+    features_merged_norm = (features_merged - min_values) / (max_values - min_values + 1e-8)  # [N, D]
+    
+    # 0~1 범위로 클리핑 (안전장치)
+    features_merged_norm = np.clip(features_merged_norm, 0.0, 1.0)
+
+    return features_merged_norm

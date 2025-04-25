@@ -10,11 +10,7 @@ base_dir = "/home/knuvi/Desktop/song/Pointcept/data"
 
 # 실험용 데이터셋 리스트
 data_list = [
-    "merge_3dgs-attr_pdis0001_scale_agg-max",
-    "merge_3dgs-attr_pdis0001_scale_agg-median",
-    "merge_3dgs-attr_pdis0001_rotation_agg-max",
-    "3dgs_prune-pditance0001_scale_agg-max",
-    "3dgs_prune-pditance0001_rotation_agg-max"
+    "fusion_pd00005_scale02_opa07_all",
 ]
 
 # 순회하면서 train/val 폴더 내 scene 개수 출력

@@ -1,15 +1,14 @@
-# PC-3DGS_fusion.py
-
-import os, json
-import argparse
 import numpy as np
-from tqdm import tqdm
+import argparse, json
+import os
+from plyfile import PlyData, PlyElement
 
 # 기존 모듈 임포트
-from utils import load_pointcept_data, load_3dgs_data, voxelize_3dgs, update_3dgs_attributes
-from fusion_utils import augment_pointcept_with_3dgs_attributes, preprocess_3dgs_attributes, remove_duplicates, prune_3dgs
+from utils import load_pointcept_data, load_3dgs_data, update_3dgs_attributes, voxelize_3dgs, save_ply
+from fusion_utils import augment_pointcept_with_3dgs_attributes, prune_3dgs, preprocess_3dgs_attributes, remove_duplicates
 
-def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_methods=None, prune_params=None, k_neighbors=5, ignore_threshold=0.6, voxel_size=0.02, use_features=('scale', 'opacity', 'rotation')):
+
+def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_methods=None, prune_params=None, k_neighbors=5, ignore_threshold=0.6, voxel_size=0.02, use_features=('scale', 'opacity', 'rotation')):
     """
     Pointcept Point Cloud와 3DGS Point Cloud를 병합하고, 3DGS 속성을 전달하여 PLY 파일로 저장.
     
@@ -17,6 +16,7 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
         pointcept_dir (str): Pointcept 데이터 디렉토리 (예: scannet/train/scene0000_00).
         path_3dgs (str): 3DGS Point Cloud 경로.
         output_dir (str): 출력 디렉토리 (예: scannet_merged/train).
+        exp (str): 실험 이름 (파일 저장 시 사용).
         prune_methods (dict): 적용할 pruning 방법 및 ratio.
         prune_params (dict): pruning 하이퍼파라미터.
         k_neighbors (int): 라벨 복사 및 속성 전달에 사용할 이웃 점 개수.
@@ -100,41 +100,49 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
     features_merged = np.vstack((features_pointcept, features_3dgs))  # 3DGS 점의 원래 속성 유지
     print(f"Final merged points: {len(points_merged)} (Pointcept: {len(points_pointcept)}, 3DGS: {len(points_3dgs)})")
 
-    # 9. Pointcept 포맷으로 저장 (.npy 파일)
-    save_dict = {
-        'coord': points_merged.astype(np.float32),
-        'color': colors_merged.astype(np.uint8),
-        'normal': normals_merged.astype(np.float32),
-        'segment20': labels_merged.astype(np.int64),
-        'segment200': labels200_merged.astype(np.int64),
-        'instance': instances_merged.astype(np.int64),
-        'features': features_merged.astype(np.float32),  # features.npy로 저장
-    }
-    os.makedirs(output_dir, exist_ok=True)
-    for key, value in save_dict.items():
-        np.save(os.path.join(output_dir, f"{key}.npy"), value)
-        print(f"Saved {key}.npy to {output_dir}")
+    # 9. PLY 파일로 저장
+    output_dir_path = os.path.join(output_dir, exp)
+    os.makedirs(output_dir_path, exist_ok=True)
+    output_ply_path = os.path.join(output_dir_path, f"{exp}.ply")
+    save_ply(
+        points_merged, colors_merged, labels_merged, output_ply_path,
+        save_separate_labels=True,
+        points_pointcept=points_pointcept,
+        colors_pointcept=colors_pointcept,
+        points_3dgs=points_3dgs
+    )
 
-def process_single_scene(scene, split, input_root, output_root, path_3dgs_root, prune_methods, prune_params, k_neighbors=5, voxel_size=0.02, use_features=('scale', 'opacity', 'rotation')):
+    # 3DGS 점 별도 저장 (라벨 포함)
+    dgs_ply_path = os.path.join(output_dir_path, f"{exp}_3dgs.ply")
+    save_ply(
+        points_3dgs, colors_3dgs, labels_3dgs, dgs_ply_path,
+        save_separate_labels=False
+    )
+
+def process_single_scene(scene, input_root, output_root, exp, path_3dgs_root, prune_methods, prune_params, k_neighbors=5, ignore_threshold=0.6, voxelize=True, voxel_size=0.02, use_features=('scale', 'opacity', 'rotation')):
     """
     단일 scene을 처리하는 함수.
     
     Args:
         scene (str): 처리할 scene 이름.
-        split (str): 처리할 데이터셋 split ('train' 또는 'val').
         input_root (str): 입력 Pointcept 데이터의 루트 디렉토리.
         output_root (str): 출력 디렉토리.
+        exp (str): 실험 이름.
         path_3dgs_root (str): 3DGS 데이터의 루트 디렉토리.
         prune_methods (dict): 적용할 pruning 방법 및 ratio.
         prune_params (dict): pruning 하이퍼파라미터.
-        k_neighbors (int): 라벨 복사 및 속성 전달에 사용할 이웃 점 개수.
-        voxel_size (float): Voxel 크기 (기본값: 0.02m). 0이 아니면 voxelization 적용.
-        use_features (tuple): 사용할 3DGS 속성 ('scale', 'opacity', 'rotation').
+        k_neighbors (int): 라벨 복사 및 일관성 체크에 사용할 이웃 점 개수.
+        ignore_threshold (float): ignore_index(-1) 라벨의 비율이 이 값 이상이면 결과 라벨을 -1로 설정.
+        voxelize (bool): Voxelization 사용 여부.
+        voxel_size (float): Voxel 크기.
+        use_features (tuple): 사용할 3DGS 속성.
     """
     try:
-        pointcept_dir = os.path.join(input_root, split, scene)
+        # 입력 경로
+        pointcept_dir = os.path.join(input_root, "val", scene)
         path_3dgs = os.path.join(path_3dgs_root, scene, "point_cloud.ply")
-        output_dir = os.path.join(output_root, split, scene)
+        # 출력 경로
+        output_dir = os.path.join(output_root)
 
         if not os.path.exists(os.path.join(pointcept_dir, "coord.npy")):
             print(f"Pointcept data not found: {pointcept_dir}")
@@ -143,39 +151,21 @@ def process_single_scene(scene, split, input_root, output_root, path_3dgs_root, 
             print(f"3DGS PLY file not found: {path_3dgs}")
             return
 
+        # 병합 및 PLY 파일로 저장
         merge_pointcept_with_3dgs(
-            pointcept_dir, path_3dgs, output_dir, prune_methods, prune_params, k_neighbors,
-            voxel_size=voxel_size, use_features=use_features
+            pointcept_dir, path_3dgs, output_dir, exp, prune_methods, prune_params,
+            k_neighbors=k_neighbors, ignore_threshold=ignore_threshold, voxel_size=voxel_size, use_features=use_features
         )
     except Exception as e:
         print(f"Error processing scene {scene}: {e}")
 
-def process_scenes(input_root, output_root, split, scene_list, path_3dgs_root, prune_methods=None, prune_params=None, k_neighbors=5, num_workers=1, voxel_size=0.02, use_features=('scale', 'opacity', 'rotation')):
-    """
-    주어진 scene 목록을 처리하여 Pointcept 포맷으로 저장.
-    
-    Args:
-        input_root (str): 입력 Pointcept 데이터의 루트 디렉토리 (예: scannet).
-        output_root (str): 출력 디렉토리 (예: scannet_merged).
-        split (str): 처리할 데이터셋 split ('train' 또는 'val').
-        scene_list (list): 처리할 scene 이름 목록.
-        path_3dgs_root (str): 3DGS 데이터의 루트 디렉토리.
-        prune_methods (dict): 적용할 pruning 방법 및 ratio.
-        prune_params (dict): pruning 하이퍼파라미터.
-        k_neighbors (int): 라벨 복사 및 속성 전달에 사용할 이웃 점 개수.
-        num_workers (int): 병렬 처리 작업자 수 (사용하지 않음).
-        voxel_size (float): Voxel 크기 (기본값: 0.02m). 0이 아니면 voxelization 적용.
-        use_features (tuple): 사용할 3DGS 속성 ('scale', 'opacity', 'rotation').
-    """
-    print(f"Processing {split} scenes (Total: {len(scene_list)} scenes)")
-    for scene in tqdm(scene_list, desc=f"Processing {split} scenes", unit="scene"):
-        process_single_scene(
-            scene, split, input_root, output_root, path_3dgs_root, prune_methods, prune_params, k_neighbors,
-            voxel_size=voxel_size, use_features=use_features
-        )
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process ScanNet scenes with 3DGS merging and save in Pointcept format with 3DGS attributes.")
+    parser = argparse.ArgumentParser(description="Process a single ScanNet scene with 3DGS merging and save as PLY for visualization.")
+    parser.add_argument(
+        "--scene",
+        default="scene0011_00",
+        help="Scene to process (e.g., scene0011_00)",
+    )
     parser.add_argument(
         "--input_root",
         default="/home/knuvi/Desktop/song/Pointcept/data/scannet",
@@ -183,8 +173,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--output_root",
-        default="/home/knuvi/Desktop/song/Pointcept/data/scannet_merged",
-        help="Output path for processed data (default: /home/knuvi/Desktop/song/Pointcept/data/scannet_merged)",
+        default="/home/knuvi/Desktop/song/gaussian-point-sampler/test/test_samples10",
+        help="Output path for processed data (default: /home/knuvi/Desktop/song/gaussian-point-sampler/test/test_samples10)",
     )
     parser.add_argument(
         "--path_3dgs_root",
@@ -192,25 +182,8 @@ if __name__ == "__main__":
         help="Path to the 3DGS dataset (default: /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output)",
     )
     parser.add_argument(
-        "--meta_root",
-        default="/home/knuvi/Desktop/song/gaussian-point-sampler/meta",
-        help="Path to the meta directory containing train_100_samples.txt and val_samples.txt (default: /home/knuvi/Desktop/song/gaussian-point-sampler/meta)",
-    )
-    parser.add_argument(
-        "--split",
-        default="train",
-        choices=["train", "val"],
-        help="Dataset split to process (train or val, default: train)",
-    )
-    parser.add_argument(
-        "--num_workers",
-        default=1,
-        type=int,
-        help="Number of workers for parallel processing (not used in sequential mode)",
-    )
-    parser.add_argument(
         "--scale_ratio",
-        default=0,
+        default=0.5,
         type=float,
         help="Ratio of points to prune based on scale (top X%). If > 0, scale pruning is enabled.",
     )
@@ -226,6 +199,11 @@ if __name__ == "__main__":
         help="Enable density-based pruning",
     )
     parser.add_argument(
+        "--enable_pointcept_distance",
+        action="store_true",
+        help="Enable Pointcept distance-based pruning",
+    )
+    parser.add_argument(
         "--enable_normal",
         action="store_true",
         help="Enable normal-based pruning",
@@ -239,19 +217,36 @@ if __name__ == "__main__":
         "--k_neighbors",
         default=5,
         type=int,
-        help="Number of neighbors for label voting and attribute transfer",
+        help="Number of neighbors for label voting and consistency check",
+    )
+    parser.add_argument(
+        "--ignore_threshold",
+        default=0.6,
+        type=float,
+        help="Threshold for ignore_index(-1) label ratio",
+    )
+    parser.add_argument(
+        "--exp",
+        default="pdistance00005_scale05_vox002",
+        help="Experiment name",
     )
     parser.add_argument(
         "--pdistance",
-        default=0.001,
+        default=0.0005,
         type=float,
-        help="Pointcept distance threshold. If specified, pointcept distance pruning is enabled.",
+        help="Pointcept distance threshold",
+    )
+    parser.add_argument(
+        "--voxelize",
+        action="store_true",
+        default=True,
+        help="Apply voxelization to 3DGS data (default: True)",
     )
     parser.add_argument(
         "--voxel_size",
         default=0.02,
         type=float,
-        help="Voxel size for 3DGS voxelization (default: 0.02m). Set to 0 to disable voxelization.",
+        help="Voxel size for 3DGS voxelization (default: 0.02m)",
     )
     parser.add_argument(
         "--use_features",
@@ -262,24 +257,14 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Split에 따라 적절한 메타 파일 읽기
-    #meta_file = "scannetv2_train.txt" if args.split == "train" else "scannetv2_val.txt"
-    meta_file = "train100_samples.txt" if args.split == "train" else "valid20_samples.txt"
-    meta_file_path = os.path.join(args.meta_root, meta_file)
-    if not os.path.exists(meta_file_path):
-        raise FileNotFoundError(f"Meta file not found: {meta_file_path}")
-
-    with open(meta_file_path) as f:
-        scenes = f.read().splitlines()
-
-    # prune_methods 설정
+    # Pruning 방법 설정
     prune_methods = {
         'scale': args.scale_ratio > 0,
         'scale_ratio': args.scale_ratio,
         'opacity': args.opacity_ratio > 0,
         'opacity_ratio': args.opacity_ratio,
         'density': args.enable_density,
-        'pointcept_distance': args.pdistance > 0,  # pdistance가 0이 아니면 pointcept_distance 활성화
+        'pointcept_distance': args.enable_pointcept_distance,
         'normal': args.enable_normal,
         'sor': args.enable_sor
     }
@@ -291,16 +276,18 @@ if __name__ == "__main__":
     prune_params['pointcept_max_distance'] = args.pdistance
     print(f'Pointcept distance threshold: {prune_params["pointcept_max_distance"]}')
 
-    process_scenes(
+    # 단일 Scene 처리
+    process_single_scene(
+        args.scene,
         args.input_root,
         args.output_root,
-        args.split,
-        scenes,
+        args.exp,
         args.path_3dgs_root,
         prune_methods,
         prune_params,
         k_neighbors=args.k_neighbors,
-        num_workers=args.num_workers,
+        ignore_threshold=args.ignore_threshold,
+        voxelize=args.voxelize,
         voxel_size=args.voxel_size,
         use_features=tuple(args.use_features)
     )

@@ -25,9 +25,9 @@ def load_pointcept_data(pointcept_dir):
         data[key] = np.load(file_path)
 
     # 음수 값 경고 (필터링 또는 변환하지 않음)
-    if np.any(data['segment20'] < 0):
-        print(f"Warning: Negative values found in segment20: {data['segment20'][data['segment20'] < 0]}")
-        print(f"Keeping negative values as ignore_index (-1) following Pointcept's approach")
+    # if np.any(data['segment20'] < 0):
+    #     print(f"Warning: Negative values found in segment20: {data['segment20'][data['segment20'] < 0]}")
+    #     print(f"Keeping negative values as ignore_index (-1) following Pointcept's approach")
 
     # 선택적 데이터 로드 (segment200, instance)
     optional_keys = ['segment200', 'instance']
@@ -36,11 +36,11 @@ def load_pointcept_data(pointcept_dir):
         if os.path.exists(file_path):
             data[key] = np.load(file_path)
             # 음수 값 경고 (필터링 또는 변환하지 않음)
-            if np.any(data[key] < 0):
-                print(f"Warning: Negative values found in {key}: {data[key][data[key] < 0]}")
-                print(f"Keeping negative values as ignore_index (-1) following Pointcept's approach")
+            # if np.any(data[key] < 0):
+            #     print(f"Warning: Negative values found in {key}: {data[key][data[key] < 0]}")
+            #     print(f"Keeping negative values as ignore_index (-1) following Pointcept's approach")
         else:
-            print(f"Warning: {key}.npy not found in {pointcept_dir}, setting to ignore_index (-1)")
+            #print(f"Warning: {key}.npy not found in {pointcept_dir}, setting to ignore_index (-1)")
             data[key] = np.full_like(data['segment20'], -1, dtype=np.int64)
 
     print(f"Loaded Pointcept data from {pointcept_dir}: {data['coord'].shape[0]} points")
@@ -66,7 +66,7 @@ def load_3dgs_data(path_3dgs):
     
     # 법선 벡터 크기 확인
     norm_3dgs = np.linalg.norm(normals_3dgs, axis=-1)
-    print(f"3DGS normals norm: min={norm_3dgs.min():.4f}, max={norm_3dgs.max():.4f}, zero_count={np.sum(norm_3dgs == 0)}")
+    #print(f"3DGS normals norm: min={norm_3dgs.min():.4f}, max={norm_3dgs.max():.4f}, zero_count={np.sum(norm_3dgs == 0)}")
     
     # 법선이 모두 0인 경우 추정
     if np.all(norm_3dgs == 0):
@@ -76,7 +76,7 @@ def load_3dgs_data(path_3dgs):
         pcd_3dgs.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=20))
         normals_3dgs = np.asarray(pcd_3dgs.normals)
         norm_3dgs = np.linalg.norm(normals_3dgs, axis=-1)
-        print(f"After estimation - 3DGS normals norm: min={norm_3dgs.min():.4f}, max={norm_3dgs.max():.4f}, zero_count={np.sum(norm_3dgs == 0)}")
+        #print(f"After estimation - 3DGS normals norm: min={norm_3dgs.min():.4f}, max={norm_3dgs.max():.4f}, zero_count={np.sum(norm_3dgs == 0)}")
     
     print(f"Loaded 3DGS data from {path_3dgs}: {points_3dgs.shape[0]} points")
     return points_3dgs, normals_3dgs, vertex_data_3dgs

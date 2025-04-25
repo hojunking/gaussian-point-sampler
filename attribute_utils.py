@@ -2,7 +2,9 @@
 import os
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import MinMaxScaler
 from plyfile import PlyData
+
 
 def load_pointcept_data(pointcept_dir):
     """
@@ -272,3 +274,4 @@ def update_3dgs_labels(points_3dgs, points_pointcept, labels_pointcept, labels20
                 mask[i] = False
 
     return labels_3dgs, labels200_3dgs, instances_3dgs, mask
+
