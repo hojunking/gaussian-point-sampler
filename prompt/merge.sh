@@ -432,30 +432,30 @@ python PC-3DGS_fusion.py \
 #   --pdistance 0.0005 \
 #   --use_features scale
 
-python PC-3DGS_fusion.py \
-  --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_rotation-norm \
-  --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-  --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-  --split train \
-  --k_neighbors 5 \
-  --scale_ratio 0 \
-  --opacity_ratio 0 \
-  --voxel_size 0.04 \
-  --pdistance 0.0005 \
-  --use_features rotation
-python PC-3DGS_fusion.py \
-  --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_rotation-norm \
-  --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-  --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-  --split val \
-  --k_neighbors 5 \
-  --scale_ratio 0 \
-  --opacity_ratio 0 \
-  --voxel_size 0.04 \
-  --pdistance 0.0005 \
-  --use_features rotation
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_rotation-norm \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split train \
+#   --k_neighbors 5 \
+#   --scale_ratio 0 \
+#   --opacity_ratio 0 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --use_features rotation
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_rotation-norm \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split val \
+#   --k_neighbors 5 \
+#   --scale_ratio 0 \
+#   --opacity_ratio 0 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --use_features rotation
 
 
 

@@ -1,1 +1,6 @@
-# gaussian-point-sampler
+## gaussian-point-sampler
+
+### env
+```
+pip install -r requirements.txt
+```
