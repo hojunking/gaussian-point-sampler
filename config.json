@@ -1,15 +1,14 @@
 {
+  "input_root": "/home/knuvi/Desktop/song/Pointcept/data/scannet",
+  "output_root": "/home/knuvi/Desktop/song/Pointcept/data/scannet_merged",
+  "path_3dgs_root": "/home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output",
+  "meta_root": "/home/knuvi/Desktop/song/gaussian-point-sampler/meta",
   "prune_params": {
-      "density_eps": 0.05,
-      "density_min_points": 50,
-      "pointcept_max_distance": 0.0005,
-      "normal_k_neighbors": 5,
-      "normal_cos_threshold": 0.9,
-      "sor_nb_neighbors": 40,
-      "sor_std_ratio": 0.1,
-      "scale_lower_threshold": 0.005,
-      "scale_upper_threshold": 0.95,
-      "opacity_lower_threshold": 0.05,
-      "opacity_upper_threshold": 0.9
+    "pointcept_max_distance": 0.0005,
+    "scale_lower_threshold": 0.005,
+    "scale_upper_threshold": 0.95,
+    "opacity_lower_threshold": 0.05,
+    "opacity_upper_threshold": 0.9,
+    "k_neighbors": 5
   }
 }

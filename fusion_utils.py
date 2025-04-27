@@ -47,26 +47,11 @@ def quaternion_to_direction(quaternion):
     return directions
 
 def augment_pointcept_with_3dgs_attributes(points_pointcept, points_3dgs, features_3dgs, k_neighbors=5, use_features=('scale',)):
-    """
-    Pointcept 점에 3DGS 속성을 전달 (KNN 사용)하고, features_3dgs도 필터링.
-    
-    Args:
-        points_pointcept (np.ndarray): Pointcept 점 좌표 [M, 3].
-        points_3dgs (np.ndarray): 3DGS 점 좌표 [N, 3].
-        features_3dgs (np.ndarray): 3DGS 속성 [N, 7] (scale_x, scale_y, scale_z, opacity, dir_x, dir_y, dir_z).
-        k_neighbors (int): KNN에서 사용할 이웃 점 개수.
-        use_features (tuple): 사용할 features ('scale', 'opacity', 'rotation').
-    
-    Returns:
-        tuple: (augmented_features, filtered_features_3dgs)
-            - augmented_features (np.ndarray): Pointcept 점에 전달된 속성 [M, D].
-            - filtered_features_3dgs (np.ndarray): 필터링된 3DGS 속성 [N, D].
-    """
     # KNN으로 이웃 찾기
     nbrs = NearestNeighbors(n_neighbors=k_neighbors, algorithm='auto').fit(points_3dgs)
     distances, indices = nbrs.kneighbors(points_pointcept)
 
-    # 사용할 features 선택 (aggregation은 mean으로 고정)
+    # 사용할 features 선택 (Pointcept에 전달용)
     selected_features_pointcept = []
     selected_features_3dgs = []
     feature_idx = 0
@@ -113,7 +98,7 @@ def augment_pointcept_with_3dgs_attributes(points_pointcept, points_3dgs, featur
 
     return augmented_features, filtered_features_3dgs
 
-def preprocess_3dgs_attributes(vertex_data_3dgs, normalize_scale=True):
+def preprocess_3dgs_attributes(raw_features_3dgs, normalize_scale=True):
     """
     3DGS 속성을 전처리하여 사용 가능한 형태로 변환.
     
@@ -124,12 +109,7 @@ def preprocess_3dgs_attributes(vertex_data_3dgs, normalize_scale=True):
     Returns:
         np.ndarray: 전처리된 3DGS 속성 [N, 7] (scale_x, scale_y, scale_z, opacity, dir_x, dir_y, dir_z).
     """
-    # 속성 추출
-    raw_features_3dgs = np.hstack([
-        np.vstack([vertex_data_3dgs[f'scale_{i}'] for i in range(3)]).T,  # [N, 3]
-        vertex_data_3dgs['opacity'][:, None],  # [N, 1]
-        np.vstack([vertex_data_3dgs[f'rot_{i}'] for i in range(4)]).T  # [N, 4]
-    ])
+    
 
     # 속성 분리
     scale = raw_features_3dgs[:, 0:3]  # [N, 3] (scale_x, scale_y, scale_z)
@@ -200,54 +180,30 @@ def remove_duplicates(points_3dgs, points_pointcept, normals_3dgs, labels_3dgs, 
     features_3dgs = features_3dgs[mask]
     return points_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs, features_3dgs
 
-def prune_3dgs(vertex_data_3dgs, points_3dgs, normals_3dgs, features_3dgs, points_pointcept, normals_pointcept, prune_methods, prune_params):
-    """
-    3DGS 점에 대해 다양한 pruning 방법을 적용.
+def pdistance_pruning(points_3dgs, features_3dgs, points_pointcept, prune_params):
     
-    Args:
-        vertex_data_3dgs: 3DGS PLY 파일의 vertex 데이터.
-        points_3dgs (np.ndarray): 3DGS 점 좌표 (N, 3).
-        normals_3dgs (np.ndarray): 3DGS 점 법선 (N, 3).
-        features_3dgs (np.ndarray): 전처리된 3DGS 속성 [N, 7] (scale_x, scale_y, scale_z, opacity, dir_x, dir_y, dir_z).
-        points_pointcept (np.ndarray): Pointcept 점 좌표 (M, 3).
-        normals_pointcept (np.ndarray): Pointcept 점 법선 (M, 3).
-        prune_methods (dict): 적용할 pruning 방법 및 ratio.
-        prune_params (dict): pruning 하이퍼파라미터.
+    print(f"Before pdistance pruning, 3DGS points: {len(points_3dgs)}")
     
-    Returns:
-        tuple: Pruning된 (points_3dgs, normals_3dgs, vertex_data_3dgs, features_3dgs).
-    """
-    print(f"Initial 3DGS points: {len(points_3dgs)}")
-    
-    # 마스크 초기화
     mask = np.ones(len(points_3dgs), dtype=bool)
     
     # 1. Pointcept Distance Pruning (최우선 적용)
-    if prune_methods.get('pointcept_distance', False):
-        pcd_pointcept = o3d.geometry.PointCloud()
-        pcd_pointcept.points = o3d.utility.Vector3dVector(points_pointcept)
-        tree = o3d.geometry.KDTreeFlann(pcd_pointcept)
-        distances = np.array([tree.search_knn_vector_3d(point, 1)[2][0] for point in points_3dgs])
-        distance_mask = distances <= prune_params['pointcept_max_distance']
-        mask = mask & distance_mask
-        print(f"Pointcept Distance Pruning: Before {len(points_3dgs)} points, Pruned {np.sum(~distance_mask)} points with distance > {prune_params['pointcept_max_distance']:.5f}, After {np.sum(mask)} points")
+    pcd_pointcept = o3d.geometry.PointCloud()
+    pcd_pointcept.points = o3d.utility.Vector3dVector(points_pointcept)
+    tree = o3d.geometry.KDTreeFlann(pcd_pointcept)
+    distances = np.array([tree.search_knn_vector_3d(point, 1)[2][0] for point in points_3dgs])
+    distance_mask = distances <= prune_params['pointcept_max_distance']
+    mask = mask & distance_mask
+    print(f"Pointcept Distance Pruning: Before {len(points_3dgs)} points, Pruned {np.sum(~distance_mask)} points with distance > {prune_params['pointcept_max_distance']:.5f}, After {np.sum(mask)} points")
     
     # Pointcept Distance Pruning 후 점 업데이트
     points_3dgs = points_3dgs[mask]
-    normals_3dgs = normals_3dgs[mask]
-    if vertex_data_3dgs is not None:
-        if isinstance(vertex_data_3dgs, dict):
-            vertex_data_3dgs = {key: value[mask] for key, value in vertex_data_3dgs.items()}
-        else:
-            print("Warning: vertex_data_3dgs is not a dict, treating as numpy array.")
-            vertex_data_3dgs = vertex_data_3dgs[mask]
-    features_3dgs = features_3dgs[mask] if features_3dgs is not None else None
+    features_3dgs = features_3dgs[mask]
+
+    return points_3dgs, features_3dgs
+
+def pruning_3dgs_attr(points_3dgs, filtered_features_3dgs, features_3dgs, prune_methods, prune_params):
     
-    # 점이 0개일 경우 조기 종료
-    if len(points_3dgs) == 0:
-        print("No 3DGS points remaining after Pointcept Distance Pruning. Skipping further pruning.")
-        return points_3dgs, normals_3dgs, vertex_data_3dgs, features_3dgs
-    
+    print(f"Before 3DGS-attr pruning, 3DGS points: {len(points_3dgs)}")
     mask = np.ones(len(points_3dgs), dtype=bool)  # 마스크 초기화
     
     # 2. Scale-based Pruning
@@ -271,11 +227,11 @@ def prune_3dgs(vertex_data_3dgs, points_3dgs, normals_3dgs, features_3dgs, point
     # 3. Opacity-based Pruning
     if prune_methods.get('opacity', False) and features_3dgs is not None:
         opacities = features_3dgs[:, 3]  # 전처리된 opacity 값 사용
-        opacity_lower_threshold = prune_params.get('opacity_lower_threshold', 0.05)
-        opacity_upper_threshold = prune_params.get('opacity_upper_threshold', 0.95)
-        opacity_threshold_mask = (opacities >= opacity_lower_threshold) & (opacities <= opacity_upper_threshold)
-        mask = mask & opacity_threshold_mask
-        print(f"Opacity Threshold Pruning: Pruned {np.sum(~opacity_threshold_mask)} points with opacity outside [{opacity_lower_threshold:.4f}, {opacity_upper_threshold:.4f}], Remaining {np.sum(mask)} points")
+        # opacity_lower_threshold = prune_params.get('opacity_lower_threshold', 0.05)
+        # opacity_upper_threshold = prune_params.get('opacity_upper_threshold', 0.95)
+        # opacity_threshold_mask = (opacities >= opacity_lower_threshold) & (opacities <= opacity_upper_threshold)
+        # mask = mask & opacity_threshold_mask
+        # print(f"Opacity Threshold Pruning: Pruned {np.sum(~opacity_threshold_mask)} points with opacity outside [{opacity_lower_threshold:.4f}, {opacity_upper_threshold:.4f}], Remaining {np.sum(mask)} points")
 
         if prune_methods.get('opacity_ratio', 0.0) > 0:
             threshold = np.percentile(opacities[mask], 100 * prune_methods['opacity_ratio'])
@@ -288,16 +244,8 @@ def prune_3dgs(vertex_data_3dgs, points_3dgs, normals_3dgs, features_3dgs, point
     
     # 최종 점 업데이트
     points_3dgs = points_3dgs[mask]
-    normals_3dgs = normals_3dgs[mask]
-    if vertex_data_3dgs is not None:
-        if isinstance(vertex_data_3dgs, dict):
-            vertex_data_3dgs = {key: value[mask] for key, value in vertex_data_3dgs.items()}
-        else:
-            print("Warning: vertex_data_3dgs is not a dict, treating as numpy array.")
-            vertex_data_3dgs = vertex_data_3dgs[mask]
-    features_3dgs = features_3dgs[mask] if features_3dgs is not None else None
+    filtered_features_3dgs = filtered_features_3dgs[mask]
     
     print(f"Final 3DGS points after pruning: {len(points_3dgs)} (Pruned {len(mask) - np.sum(mask)} points in total)")
-    return points_3dgs, normals_3dgs, vertex_data_3dgs, features_3dgs
-
+    return points_3dgs, filtered_features_3dgs
 

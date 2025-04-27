@@ -5,29 +5,155 @@ export PYTHONPATH=$PYTHONPATH:/home/knuvi/Desktop/song/Pointcept
 
 # python PC-3DGS_fusion.py \
 #   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_opacity \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_scale09_scale \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split train \
+#   --k_neighbors 5 \
+#   --scale_ratio 0.9 \
+#   --opacity_ratio 0 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --use_features scale
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_scale09_scale \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split val \
+#   --k_neighbors 5 \
+#   --scale_ratio 0.9 \
+#   --opacity_ratio 0 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --use_features scale
+
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_scale09_rotation \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split train \
+#   --k_neighbors 5 \
+#   --scale_ratio 0.9 \
+#   --opacity_ratio 0 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --use_features rotation
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_scale09_rotation \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split val \
+#   --k_neighbors 5 \
+#   --scale_ratio 0.9 \
+#   --opacity_ratio 0 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --use_features rotation
+
+
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_opacity03_opacity \
 #   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
 #   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
 #   --split train \
 #   --k_neighbors 5 \
 #   --scale_ratio 0 \
-#   --opacity_ratio 0 \
+#   --opacity_ratio 0.3 \
 #   --voxel_size 0.04 \
 #   --pdistance 0.0005 \
 #   --use_features opacity
 # python PC-3DGS_fusion.py \
 #   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_opacity \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_opacity03_opacity \
 #   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
 #   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
 #   --split val \
 #   --k_neighbors 5 \
 #   --scale_ratio 0 \
-#   --opacity_ratio 0 \
+#   --opacity_ratio 0.3 \
 #   --voxel_size 0.04 \
 #   --pdistance 0.0005 \
 #   --use_features opacity
 
+python PC-3DGS_fusion.py \
+  --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+  --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_opacity05-woex_opacity \
+  --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+  --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+  --split train \
+  --k_neighbors 5 \
+  --scale_ratio 0 \
+  --opacity_ratio 0.5 \
+  --voxel_size 0.04 \
+  --pdistance 0.0005 \
+  --use_features opacity
+python PC-3DGS_fusion.py \
+  --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+  --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_opacity05-woex_opacity \
+  --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+  --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+  --split val \
+  --k_neighbors 5 \
+  --scale_ratio 0 \
+  --opacity_ratio 0.5 \
+  --voxel_size 0.04 \
+  --pdistance 0.0005 \
+  --use_features opacity
+
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_opacity07_opacity \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split train \
+#   --k_neighbors 5 \
+#   --scale_ratio 0 \
+#   --opacity_ratio 0.7 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --use_features opacity
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_opacity07_opacity \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split val \
+#   --k_neighbors 5 \
+#   --scale_ratio 0 \
+#   --opacity_ratio 0.7 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --use_features opacity
+
+
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_opacity09_opacity \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split train \
+#   --k_neighbors 5 \
+#   --scale_ratio 0 \
+#   --opacity_ratio 0.9 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --use_features opacity
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_opacity09_opacity \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split val \
+#   --k_neighbors 5 \
+#   --scale_ratio 0 \
+#   --opacity_ratio 0.9 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --use_features opacity
 # python PC-3DGS_fusion.py \
 #   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
 #   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox004_scale-opacity \
@@ -357,30 +483,30 @@ export PYTHONPATH=$PYTHONPATH:/home/knuvi/Desktop/song/Pointcept
 #   --pdistance 0.0005 \
 #   --use_features scale
 
-python PC-3DGS_fusion.py \
-  --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox002_rotation-norm \
-  --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-  --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-  --split train \
-  --k_neighbors 5 \
-  --scale_ratio 0 \
-  --opacity_ratio 0 \
-  --voxel_size 0.02 \
-  --pdistance 0.0005 \
-  --use_features rotation
-python PC-3DGS_fusion.py \
-  --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox002_rotation-norm \
-  --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-  --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-  --split val \
-  --k_neighbors 5 \
-  --scale_ratio 0 \
-  --opacity_ratio 0 \
-  --voxel_size 0.02 \
-  --pdistance 0.0005 \
-  --use_features rotation
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox002_rotation-norm \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split train \
+#   --k_neighbors 5 \
+#   --scale_ratio 0 \
+#   --opacity_ratio 0 \
+#   --voxel_size 0.02 \
+#   --pdistance 0.0005 \
+#   --use_features rotation
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_vox002_rotation-norm \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split val \
+#   --k_neighbors 5 \
+#   --scale_ratio 0 \
+#   --opacity_ratio 0 \
+#   --voxel_size 0.02 \
+#   --pdistance 0.0005 \
+#   --use_features rotation
 
 # python PC-3DGS_fusion.py \
 #   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
@@ -485,30 +611,30 @@ python PC-3DGS_fusion.py \
 #   --pdistance 0.0005 \
 #   --use_features scale
 
-python PC-3DGS_fusion.py \
-  --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_scale02_opac02_vox002_rotation-norm \
-  --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-  --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-  --split train \
-  --k_neighbors 5 \
-  --scale_ratio 0.2 \
-  --opacity_ratio 0.2 \
-  --voxel_size 0.02 \
-  --pdistance 0.0005 \
-  --use_features rotation
-python PC-3DGS_fusion.py \
-  --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_scale02_opac02_vox002_rotation-norm \
-  --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-  --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-  --split val \
-  --k_neighbors 5 \
-  --scale_ratio 0.2 \
-  --opacity_ratio 0.2 \
-  --voxel_size 0.02 \
-  --pdistance 0.0005 \
-  --use_features rotation
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_scale02_opac02_vox002_rotation-norm \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split train \
+#   --k_neighbors 5 \
+#   --scale_ratio 0.2 \
+#   --opacity_ratio 0.2 \
+#   --voxel_size 0.02 \
+#   --pdistance 0.0005 \
+#   --use_features rotation
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_scale02_opac02_vox002_rotation-norm \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split val \
+#   --k_neighbors 5 \
+#   --scale_ratio 0.2 \
+#   --opacity_ratio 0.2 \
+#   --voxel_size 0.02 \
+#   --pdistance 0.0005 \
+#   --use_features rotation
 
 # python PC-3DGS_fusion.py \
 #   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
@@ -562,30 +688,30 @@ python PC-3DGS_fusion.py \
 #   --pdistance 0.0005 \
 #   --use_features scale
 
-python PC-3DGS_fusion.py \
-  --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_scale04_opac02_vox002_rotation-norm \
-  --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-  --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-  --split train \
-  --k_neighbors 5 \
-  --scale_ratio 0.4 \
-  --opacity_ratio 0.2 \
-  --voxel_size 0.02 \
-  --pdistance 0.0005 \
-  --use_features rotation
-python PC-3DGS_fusion.py \
-  --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_scale04_opac02_vox002_rotation-norm \
-  --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
-  --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
-  --split val \
-  --k_neighbors 5 \
-  --scale_ratio 0.4 \
-  --opacity_ratio 0.2 \
-  --voxel_size 0.02 \
-  --pdistance 0.0005 \
-  --use_features rotation
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_scale04_opac02_vox002_rotation-norm \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split train \
+#   --k_neighbors 5 \
+#   --scale_ratio 0.4 \
+#   --opacity_ratio 0.2 \
+#   --voxel_size 0.02 \
+#   --pdistance 0.0005 \
+#   --use_features rotation
+# python PC-3DGS_fusion.py \
+#   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/pd00005_scale04_opac02_vox002_rotation-norm \
+#   --path_3dgs_root /home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output \
+#   --meta_root /home/knuvi/Desktop/song/gaussian-point-sampler/meta \
+#   --split val \
+#   --k_neighbors 5 \
+#   --scale_ratio 0.4 \
+#   --opacity_ratio 0.2 \
+#   --voxel_size 0.02 \
+#   --pdistance 0.0005 \
+#   --use_features rotation
 
 # python PC-3DGS_fusion.py \
 #   --input_root /home/knuvi/Desktop/song/Pointcept/data/scannet \
