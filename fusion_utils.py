@@ -202,19 +202,12 @@ def pdistance_pruning(points_3dgs, features_3dgs, points_pointcept, prune_params
     return points_3dgs, features_3dgs
 
 def pruning_3dgs_attr(points_3dgs, filtered_features_3dgs, features_3dgs, prune_methods, prune_params):
-    
     print(f"Before 3DGS-attr pruning, 3DGS points: {len(points_3dgs)}")
     mask = np.ones(len(points_3dgs), dtype=bool)  # 마스크 초기화
-    
-    # 2. Scale-based Pruning
+
+    # 1. Scale-based Pruning
     if prune_methods.get('scale', False) and features_3dgs is not None:
         scales = features_3dgs[:, 0:3]  # 전처리된 scale 값 사용
-        scale_lower_threshold = prune_params.get('scale_lower_threshold', 0.005)
-        scale_upper_threshold = prune_params.get('scale_upper_threshold', 0.95)
-        scale_threshold_mask = np.all((scales >= scale_lower_threshold) & (scales <= scale_upper_threshold), axis=1)
-        mask = mask & scale_threshold_mask
-        print(f"Scale Threshold Pruning: Pruned {np.sum(~scale_threshold_mask)} points with scale outside [{scale_lower_threshold:.4f}, {scale_upper_threshold:.4f}], Remaining {np.sum(mask)} points")
-
         if prune_methods.get('scale_ratio', 0.0) > 0:
             scale_magnitudes = np.linalg.norm(scales[mask], axis=-1)
             threshold = np.percentile(scale_magnitudes, 100 * (1 - prune_methods['scale_ratio']))
@@ -223,15 +216,14 @@ def pruning_3dgs_attr(points_3dgs, filtered_features_3dgs, features_3dgs, prune_
             temp_mask[mask] = scale_ratio_mask
             mask = mask & temp_mask
             print(f"Scale Ratio Pruning: Pruned {np.sum(~scale_ratio_mask)} points with scale > {threshold:.4f}, Remaining {np.sum(mask)} points")
-    
-    # 3. Opacity-based Pruning
+
+    # 2. Opacity-based Pruning
     if prune_methods.get('opacity', False) and features_3dgs is not None:
         opacities = features_3dgs[:, 3]  # 전처리된 opacity 값 사용
-        # opacity_lower_threshold = prune_params.get('opacity_lower_threshold', 0.05)
-        # opacity_upper_threshold = prune_params.get('opacity_upper_threshold', 0.95)
-        # opacity_threshold_mask = (opacities >= opacity_lower_threshold) & (opacities <= opacity_upper_threshold)
-        # mask = mask & opacity_threshold_mask
-        # print(f"Opacity Threshold Pruning: Pruned {np.sum(~opacity_threshold_mask)} points with opacity outside [{opacity_lower_threshold:.4f}, {opacity_upper_threshold:.4f}], Remaining {np.sum(mask)} points")
+        opacity_upper_threshold = prune_params.get('opacity_upper_threshold', 0.95)
+        opacity_threshold_mask = (opacities <= opacity_upper_threshold)
+        mask = mask & opacity_threshold_mask
+        print(f"Opacity Threshold Pruning: Pruned {np.sum(~opacity_threshold_mask)} points with opacity outside [ < {opacity_upper_threshold:.4f}], Remaining {np.sum(mask)} points")
 
         if prune_methods.get('opacity_ratio', 0.0) > 0:
             threshold = np.percentile(opacities[mask], 100 * prune_methods['opacity_ratio'])
@@ -240,12 +232,42 @@ def pruning_3dgs_attr(points_3dgs, filtered_features_3dgs, features_3dgs, prune_
             temp_mask[mask] = opacity_ratio_mask
             mask = mask & temp_mask
             print(f"Opacity Ratio Pruning: Pruned {np.sum(~opacity_ratio_mask)} points with opacity < {threshold:.4f}, Remaining {np.sum(mask)} points")
-    
-    
+
+    # 3. Rotation Consistency-based Pruning
+    if prune_methods.get('rotation', False) and features_3dgs is not None:
+        # Rotation 추출
+        rotation_3dgs = features_3dgs[:, -3:]  # [N, 3], [0, 1] 범위
+        rotation_3dgs = rotation_3dgs * 2 - 1  # [-1, 1]로 복원
+
+        # KNN으로 Consistency Score 계산
+        k_neighbors = prune_params.get('k_neighbors', 5)  # 기본값 5
+        knn = NearestNeighbors(n_neighbors=k_neighbors + 1).fit(points_3dgs)
+        distances, indices = knn.kneighbors(points_3dgs)
+
+        consistency_scores = np.zeros(points_3dgs.shape[0])
+        for i in range(points_3dgs.shape[0]):
+            neighbor_idx = indices[i, 1:]  # 자기 자신 제외
+            rot_i = rotation_3dgs[i]
+            rot_neighbors = rotation_3dgs[neighbor_idx]
+            cos_sim = np.sum(rot_i * rot_neighbors, axis=1) / (
+                np.linalg.norm(rot_i) * np.linalg.norm(rot_neighbors, axis=1) + 1e-8
+            )
+            consistency_scores[i] = np.mean(cos_sim)
+
+        # Rotation Consistency 기반 Pruning
+        if prune_methods.get('rotation_ratio', 0.0) > 0:
+            threshold = np.percentile(consistency_scores[mask], 100 * prune_methods['rotation_ratio'])
+            rotation_ratio_mask = consistency_scores[mask] >= threshold
+            temp_mask = np.ones(len(mask), dtype=bool)
+            temp_mask[mask] = rotation_ratio_mask
+            mask = mask & temp_mask
+            print(f"Rotation Consistency Pruning: Pruned {np.sum(~rotation_ratio_mask)} points with consistency < {threshold:.4f}, Remaining {np.sum(mask)} points")
+
     # 최종 점 업데이트
     points_3dgs = points_3dgs[mask]
     filtered_features_3dgs = filtered_features_3dgs[mask]
-    
+    features_3dgs = features_3dgs[mask]  # features_3dgs도 업데이트
+
     print(f"Final 3DGS points after pruning: {len(points_3dgs)} (Pruned {len(mask) - np.sum(mask)} points in total)")
     return points_3dgs, filtered_features_3dgs
 

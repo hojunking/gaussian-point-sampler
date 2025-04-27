@@ -194,6 +194,13 @@ if __name__ == "__main__":
         help="Ratio of points to prune based on opacity (bottom X%). If > 0, opacity pruning is enabled.",
     )
     parser.add_argument(
+        "--rotation_ratio",
+        default=0,
+        type=float,
+        help="Ratio of points to prune based on rotation (bottom X%). If > 0, rotation pruning is enabled.",
+    )
+
+    parser.add_argument(
         "--pdistance",
         default=0.001,
         type=float,
@@ -230,6 +237,8 @@ if __name__ == "__main__":
     prune_methods = {
         'scale': args.scale_ratio > 0,
         'scale_ratio': args.scale_ratio,
+        'rotation': args.rotation_ratio > 0,
+        'rotation_ratio': args.rotation_ratio,
         'opacity': args.opacity_ratio > 0,
         'opacity_ratio': args.opacity_ratio,
         'pointcept_distance': args.pdistance > 0,
