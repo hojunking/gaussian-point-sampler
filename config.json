@@ -9,6 +9,9 @@
     "scale_upper_threshold": 0.95,
     "opacity_lower_threshold": 0.05,
     "opacity_upper_threshold": 0.9,
-    "k_neighbors": 5
+    "k_neighbors": 5,
+    "w_scale": 0.5,
+    "w_opacity": 0.3,
+    "w_rotation": 0.2
   }
 }

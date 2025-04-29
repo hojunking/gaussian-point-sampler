@@ -202,51 +202,31 @@ def pdistance_pruning(points_3dgs, features_3dgs, points_pointcept, prune_params
     return points_3dgs, features_3dgs
 
 def pruning_3dgs_attr(points_3dgs, filtered_features_3dgs, features_3dgs, prune_methods, prune_params):
-    print(f"Before 3DGS-attr pruning, 3DGS points: {len(points_3dgs)}")
-    mask = np.ones(len(points_3dgs), dtype=bool)  # 마스크 초기화
+    scores = {}
 
-    # 1. Scale-based Pruning
-    if prune_methods.get('scale', False) and features_3dgs is not None:
-        scales = features_3dgs[:, 0:3]  # 전처리된 scale 값 사용
-        if prune_methods.get('scale_ratio', 0.0) > 0:
-            scale_magnitudes = np.linalg.norm(scales[mask], axis=-1)
-            threshold = np.percentile(scale_magnitudes, 100 * (1 - prune_methods['scale_ratio']))
-            scale_ratio_mask = scale_magnitudes <= threshold
-            temp_mask = np.ones(len(mask), dtype=bool)
-            temp_mask[mask] = scale_ratio_mask
-            mask = mask & temp_mask
-            print(f"Scale Ratio Pruning: Pruned {np.sum(~scale_ratio_mask)} points with scale > {threshold:.4f}, Remaining {np.sum(mask)} points")
+    # 1. Scale-based Score
+    if prune_params.get('w_scale', 0.0) > 0 and features_3dgs is not None:
+        scales = features_3dgs[:, 0:3]
+        scale_magnitudes = np.linalg.norm(scales, axis=-1)
+        scores['scale'] = 1 - (scale_magnitudes - scale_magnitudes.min()) / (scale_magnitudes.max() - scale_magnitudes.min() + 1e-8)
 
-    # 2. Opacity-based Pruning
-    if prune_methods.get('opacity', False) and features_3dgs is not None:
-        opacities = features_3dgs[:, 3]  # 전처리된 opacity 값 사용
-        opacity_upper_threshold = prune_params.get('opacity_upper_threshold', 0.95)
-        opacity_threshold_mask = (opacities <= opacity_upper_threshold)
-        mask = mask & opacity_threshold_mask
-        print(f"Opacity Threshold Pruning: Pruned {np.sum(~opacity_threshold_mask)} points with opacity outside [ < {opacity_upper_threshold:.4f}], Remaining {np.sum(mask)} points")
+    # 2. Opacity-based Score (상한 임계값 제거)
+    if prune_params.get('w_opacity', 0.0) > 0 and features_3dgs is not None:
+        opacities = features_3dgs[:, 3]
+        scores['opacity'] = (opacities - opacities.min()) / (opacities.max() - opacities.min() + 1e-8)
 
-        if prune_methods.get('opacity_ratio', 0.0) > 0:
-            threshold = np.percentile(opacities[mask], 100 * prune_methods['opacity_ratio'])
-            opacity_ratio_mask = opacities[mask] >= threshold
-            temp_mask = np.ones(len(mask), dtype=bool)
-            temp_mask[mask] = opacity_ratio_mask
-            mask = mask & temp_mask
-            print(f"Opacity Ratio Pruning: Pruned {np.sum(~opacity_ratio_mask)} points with opacity < {threshold:.4f}, Remaining {np.sum(mask)} points")
+    # 3. Rotation Consistency-based Score
+    if prune_params.get('w_rotation', 0.0) > 0 and features_3dgs is not None:
+        rotation_3dgs = features_3dgs[:, -3:]
+        rotation_3dgs = rotation_3dgs * 2 - 1
 
-    # 3. Rotation Consistency-based Pruning
-    if prune_methods.get('rotation', False) and features_3dgs is not None:
-        # Rotation 추출
-        rotation_3dgs = features_3dgs[:, -3:]  # [N, 3], [0, 1] 범위
-        rotation_3dgs = rotation_3dgs * 2 - 1  # [-1, 1]로 복원
-
-        # KNN으로 Consistency Score 계산
-        k_neighbors = prune_params.get('k_neighbors', 5)  # 기본값 5
+        k_neighbors = prune_params.get('k_neighbors', 5)
         knn = NearestNeighbors(n_neighbors=k_neighbors + 1).fit(points_3dgs)
         distances, indices = knn.kneighbors(points_3dgs)
 
         consistency_scores = np.zeros(points_3dgs.shape[0])
         for i in range(points_3dgs.shape[0]):
-            neighbor_idx = indices[i, 1:]  # 자기 자신 제외
+            neighbor_idx = indices[i, 1:]
             rot_i = rotation_3dgs[i]
             rot_neighbors = rotation_3dgs[neighbor_idx]
             cos_sim = np.sum(rot_i * rot_neighbors, axis=1) / (
@@ -254,20 +234,72 @@ def pruning_3dgs_attr(points_3dgs, filtered_features_3dgs, features_3dgs, prune_
             )
             consistency_scores[i] = np.mean(cos_sim)
 
-        # Rotation Consistency 기반 Pruning
-        if prune_methods.get('rotation_ratio', 0.0) > 0:
-            threshold = np.percentile(consistency_scores[mask], 100 * prune_methods['rotation_ratio'])
-            rotation_ratio_mask = consistency_scores[mask] >= threshold
-            temp_mask = np.ones(len(mask), dtype=bool)
-            temp_mask[mask] = rotation_ratio_mask
-            mask = mask & temp_mask
-            print(f"Rotation Consistency Pruning: Pruned {np.sum(~rotation_ratio_mask)} points with consistency < {threshold:.4f}, Remaining {np.sum(mask)} points")
+        scores['rotation'] = (consistency_scores - consistency_scores.min()) / (consistency_scores.max() - consistency_scores.min() + 1e-8)
 
-    # 최종 점 업데이트
+    return scores
+
+def pruning_3dgs_attr_hybrid(points_3dgs, filtered_features_3dgs, features_3dgs, prune_methods, prune_params):
+    print(f"Before 3DGS-attr hybrid pruning, 3DGS points: {len(points_3dgs)}")
+    
+    scores = pruning_3dgs_attr(points_3dgs, filtered_features_3dgs, features_3dgs, prune_methods, prune_params)
+
+    # 분포 정규화
+    for method in scores:
+        score = scores[method]
+        mean = np.mean(score)
+        std = np.std(score) + 1e-8
+        scores[method] = (score - mean) / std
+        scores[method] = (scores[method] - scores[method].min()) / (scores[method].max() - scores[method].min() + 1e-8)
+
+    weights = {
+        'scale': prune_params.get('w_scale', 0.0),
+        'opacity': prune_params.get('w_opacity', 0.0),
+        'rotation': prune_params.get('w_rotation', 0.0)
+    }
+
+    total_weight = sum(weights.values())
+    if total_weight > 0:
+        for key in weights:
+            weights[key] /= total_weight
+    else:
+        raise ValueError("At least one pruning method must be enabled with non-zero weight.")
+
+    importance_scores = np.zeros(len(points_3dgs))
+    for method, score in scores.items():
+        importance_scores += weights[method] * score
+
+    pruning_ratio = prune_params.get('pruning_ratio', 0.0)
+    if pruning_ratio > 0:
+        threshold = np.percentile(importance_scores, 100 * pruning_ratio)
+        mask = importance_scores >= threshold
+        print(f"Hybrid Pruning: Pruned {np.sum(~mask)} points with importance score < {threshold:.4f}, Remaining {np.sum(mask)} points")
+        
+        pruned_indices = np.where(~mask)[0]
+        if len(pruned_indices) > 0:
+            contrib = {}
+            for method in weights:
+                if method in scores:
+                    contrib[method] = weights[method] * scores[method][pruned_indices] / (importance_scores[pruned_indices] + 1e-8)
+                else:
+                    contrib[method] = np.zeros(len(pruned_indices))
+            
+            avg_contrib = {method: np.mean(contrib[method]) for method in contrib}
+            total_contrib = sum(avg_contrib.values())
+            if total_contrib > 0:
+                contrib_percent = {method: (avg_contrib[method] / total_contrib) * 100 for method in avg_contrib}
+            else:
+                contrib_percent = {method: 0.0 for method in avg_contrib}
+            
+            print(f"Pruning Contribution - Scale: {contrib_percent['scale']:.1f}%, Opacity: {contrib_percent['opacity']:.1f}%, Rotation: {contrib_percent['rotation']:.1f}%")
+        else:
+            print("No points were pruned, skipping contribution analysis.")
+    else:
+        mask = np.ones(len(points_3dgs), dtype=bool)
+        print("No final pruning applied (pruning_ratio = 0).")
+
     points_3dgs = points_3dgs[mask]
     filtered_features_3dgs = filtered_features_3dgs[mask]
-    features_3dgs = features_3dgs[mask]  # features_3dgs도 업데이트
+    features_3dgs = features_3dgs[mask]
 
-    print(f"Final 3DGS points after pruning: {len(points_3dgs)} (Pruned {len(mask) - np.sum(mask)} points in total)")
+    print(f"Final 3DGS points after hybrid pruning: {len(points_3dgs)} (Pruned {len(mask) - np.sum(mask)} points in total)")
     return points_3dgs, filtered_features_3dgs
-

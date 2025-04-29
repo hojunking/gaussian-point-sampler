@@ -7,9 +7,9 @@ from tqdm import tqdm
 
 # 기존 모듈 임포트
 from utils import load_pointcept_data, load_3dgs_data, voxelize_3dgs, update_3dgs_attributes
-from fusion_utils import augment_pointcept_with_3dgs_attributes, preprocess_3dgs_attributes, remove_duplicates, pruning_3dgs_attr, pdistance_pruning, pruning_3dgs_attr_hybrid
+from fusion_utils import preprocess_3dgs_attributes
 
-def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_methods=None, prune_params=None, k_neighbors=5, ignore_threshold=0.6, voxel_size=0.02, use_features=('scale', 'opacity', 'rotation')):
+def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, k_neighbors=5, ignore_threshold=0.6, voxel_size=0.02):
     # 1. Pointcept 데이터 로드 (.npy 파일에서)
     pointcept_data = load_pointcept_data(pointcept_dir)
     points_pointcept = pointcept_data['coord']
@@ -26,11 +26,6 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
     print("Preprocessing 3DGS attributes...")
     features_3dgs = preprocess_3dgs_attributes(raw_features_3dgs)
 
-    # 4. 3DGS pdistance Pruning
-    points_3dgs, features_3dgs = pdistance_pruning(
-        points_3dgs, features_3dgs, points_pointcept, prune_params
-    )
-
     # 5. 3DGS 데이터 Voxelization (옵션)
     voxelize = voxel_size != 0  # voxel_size가 0이 아니면 voxelize 활성화
     if voxelize:
@@ -38,17 +33,6 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
         points_3dgs, features_3dgs = voxelize_3dgs(
             points_3dgs, features_3dgs, voxel_size=voxel_size, k_neighbors=5)
     
-    # 6. 3DGS-attr transfer
-    print("Augmenting Pointcept points with 3DGS attributes...")
-    features_pointcept, filtered_features_3dgs  = augment_pointcept_with_3dgs_attributes(
-        points_pointcept, points_3dgs, features_3dgs, k_neighbors=k_neighbors, use_features=use_features
-    )
-    
-    # 7. 3DGS-attr Pruning
-    points_3dgs, features_3dgs = pruning_3dgs_attr_hybrid(
-        points_3dgs, filtered_features_3dgs, features_3dgs, prune_methods, prune_params
-    )
-
     # 8. Point cloud color, normals, labels transfer 
     print("Updating 3DGS attributes from Pointcept...")
     colors_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, mask = update_3dgs_attributes(
@@ -71,39 +55,21 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
     ignore_ratio = ignore_count / total_count if total_count > 0 else 0
     print(f"3DGS points with label -1: {ignore_count}/{total_count} (Ratio: {ignore_ratio:.4f})")
 
-    # 7. 중복 점 제거 (3DGS 점 제거)
-    print("Removing duplicate points...")
-    points_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs, features_3dgs = remove_duplicates(
-        points_3dgs, points_pointcept, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs, features_3dgs
-    )
-
-    # 8. 병합
-    print("Merging Pointcept and 3DGS points...")
-    points_merged = np.vstack((points_pointcept, points_3dgs))
-    colors_merged = np.vstack((colors_pointcept, colors_3dgs))
-    normals_merged = np.vstack((normals_pointcept, normals_3dgs))
-    labels_merged = np.concatenate((labels_pointcept, labels_3dgs))
-    labels200_merged = np.concatenate((labels200_pointcept, labels200_3dgs))
-    instances_merged = np.concatenate((instances_pointcept, instances_3dgs))
-    features_merged = np.vstack((features_pointcept, features_3dgs))  # 3DGS 점의 원래 속성 유지
-    print(f"Final merged points: {len(points_merged)} (Pointcept: {len(points_pointcept)}, 3DGS: {len(points_3dgs)})")
-
     # 9. Pointcept 포맷으로 저장 (.npy 파일)
     save_dict = {
-        'coord': points_merged.astype(np.float32),
-        'color': colors_merged.astype(np.uint8),
-        'normal': normals_merged.astype(np.float32),
-        'segment20': labels_merged.astype(np.int64),
-        'segment200': labels200_merged.astype(np.int64),
-        'instance': instances_merged.astype(np.int64),
-        'features': features_merged.astype(np.float32),  # features.npy로 저장
+        'coord': points_3dgs.astype(np.float32),
+        'color': colors_3dgs.astype(np.uint8),
+        'normal': normals_3dgs.astype(np.float32),
+        'segment20': labels_3dgs.astype(np.int64),
+        'segment200': labels200_3dgs.astype(np.int64),
+        'instance': instances_3dgs.astype(np.int64),
     }
     os.makedirs(output_dir, exist_ok=True)
     for key, value in save_dict.items():
         np.save(os.path.join(output_dir, f"{key}.npy"), value)
         print(f"Saved {key}.npy to {output_dir}")
 
-def process_single_scene(scene, split, input_root, output_root, path_3dgs_root, prune_methods, prune_params, k_neighbors=5, voxel_size=0.02, use_features=('scale', 'opacity', 'rotation')):
+def process_single_scene(scene, split, input_root, output_root, path_3dgs_root, k_neighbors=5, voxel_size=0.02):
     """
     단일 scene을 처리하는 함수.
     
@@ -132,13 +98,12 @@ def process_single_scene(scene, split, input_root, output_root, path_3dgs_root, 
             return
 
         merge_pointcept_with_3dgs(
-            pointcept_dir, path_3dgs, output_dir, prune_methods, prune_params, k_neighbors,
-            voxel_size=voxel_size, use_features=use_features
+            pointcept_dir, path_3dgs, output_dir, k_neighbors, voxel_size=voxel_size
         )
     except Exception as e:
         print(f"Error processing scene {scene}: {e}")
 
-def process_scenes(input_root, output_root, split, scene_list, path_3dgs_root, prune_methods=None, prune_params=None, k_neighbors=5, num_workers=1, voxel_size=0.02, use_features=('scale', 'opacity', 'rotation')):
+def process_scenes(input_root, output_root, split, scene_list, path_3dgs_root, k_neighbors=5, num_workers=1, voxel_size=0.02):
     """
     주어진 scene 목록을 처리하여 Pointcept 포맷으로 저장.
     
@@ -158,8 +123,7 @@ def process_scenes(input_root, output_root, split, scene_list, path_3dgs_root, p
     print(f"Processing {split} scenes (Total: {len(scene_list)} scenes)")
     for scene in tqdm(scene_list, desc=f"Processing {split} scenes", unit="scene"):
         process_single_scene(
-            scene, split, input_root, output_root, path_3dgs_root, prune_methods, prune_params, k_neighbors,
-            voxel_size=voxel_size, use_features=use_features
+            scene, split, input_root, output_root, path_3dgs_root, k_neighbors, voxel_size=voxel_size
         )
 
 if __name__ == "__main__":
@@ -182,36 +146,11 @@ if __name__ == "__main__":
         help="Number of workers for parallel processing",
     )
     parser.add_argument(
-        "--pruning_ratio",
-        default=0.0,
-        type=float,
-        help="Final ratio of points to prune based on importance scores (bottom X%)",
-    )
-    parser.add_argument(
-        "--attr_weight",
-        nargs=3,
-        type=float,
-        default=[0.5, 0.3, 0.2],
-        help="Weights for scale, opacity, rotation in hybrid pruning (default: 0.5 0.3 0.2). Set to 0 to disable pruning for that attribute.",
-    )
-    parser.add_argument(
-        "--pdistance",
-        default=0.001,
-        type=float,
-        help="Pointcept distance threshold",
-    )
-    parser.add_argument(
         "--voxel_size",
         default=0.04,
         type=float,
         help="Voxel size for 3DGS voxelization (default: 0.02m)",
     )
-    parser.add_argument(
-        "--use_features",
-        nargs='+',
-        help="3DGS features to transfer (default: scale opacity rotation)",
-    )
-
     args = parser.parse_args()
 
     # Config 파일 로드
@@ -222,16 +161,8 @@ if __name__ == "__main__":
     input_root = config['input_root']
     path_3dgs_root = config['path_3dgs_root']
     meta_root = config['meta_root']
-    prune_params = config['prune_params']
-    k_neighbors = prune_params['k_neighbors']
-    prune_params['pointcept_max_distance'] = args.pdistance
-    prune_params['pruning_ratio'] = args.pruning_ratio
-    prune_params['w_scale'], prune_params['w_rotation'], prune_params['w_opacity'] = args.attr_weight
+    k_neighbors = 5
 
-    # Prune methods 설정 (pointcept_distance만 유지)
-    prune_methods = {
-        'pointcept_distance': args.pdistance > 0,
-    }
 
     # Data type에 따른 메타 파일 선택
     if args.data_type == 'full':
@@ -249,19 +180,16 @@ if __name__ == "__main__":
     with open(train_meta_file_path) as f:
         train_scenes = f.read().splitlines()
 
-    process_scenes(
-        input_root,
-        args.output_root,
-        'train',
-        train_scenes,
-        path_3dgs_root,
-        prune_methods,
-        prune_params,
-        k_neighbors=k_neighbors,
-        num_workers=args.num_workers,
-        voxel_size=args.voxel_size,
-        use_features=tuple(args.use_features)
-    )
+    # process_scenes(
+    #     input_root,
+    #     args.output_root,
+    #     'train',
+    #     train_scenes,
+    #     path_3dgs_root,
+    #     k_neighbors=k_neighbors,
+    #     num_workers=args.num_workers,
+    #     voxel_size=args.voxel_size,
+    # )
 
     # Val split 처리
     val_meta_file_path = os.path.join(meta_root, val_meta_file)
@@ -277,10 +205,7 @@ if __name__ == "__main__":
         'val',
         val_scenes,
         path_3dgs_root,
-        prune_methods,
-        prune_params,
         k_neighbors=k_neighbors,
         num_workers=args.num_workers,
         voxel_size=args.voxel_size,
-        use_features=tuple(args.use_features)
     )
