@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 # 기존 모듈 임포트
 from utils import load_pointcept_data, load_3dgs_data, voxelize_3dgs, update_3dgs_attributes
-from fusion_utils import augment_pointcept_with_3dgs_attributes, preprocess_3dgs_attributes, remove_duplicates, pruning_3dgs_attr, pdistance_pruning, pruning_3dgs_attr_hybrid
+from fusion_utils import augment_pointcept_with_3dgs_attributes, preprocess_3dgs_attributes, remove_duplicates, pdistance_pruning, pruning_3dgs_attr
 
 def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_methods=None, prune_params=None, k_neighbors=5, ignore_threshold=0.6, voxel_size=0.02, use_features=('scale', 'opacity', 'rotation')):
     # 1. Pointcept 데이터 로드 (.npy 파일에서)
@@ -36,7 +36,7 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
     if voxelize:
         print("Applying Voxelization to 3DGS points...")
         points_3dgs, features_3dgs = voxelize_3dgs(
-            points_3dgs, features_3dgs, voxel_size=voxel_size, k_neighbors=5)
+            points_3dgs, features_3dgs, voxel_size=voxel_size, k_neighbors_max=20)
     
     # 6. 3DGS-attr transfer
     print("Augmenting Pointcept points with 3DGS attributes...")
@@ -45,7 +45,7 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
     )
     
     # 7. 3DGS-attr Pruning
-    points_3dgs, features_3dgs = pruning_3dgs_attr_hybrid(
+    points_3dgs, features_3dgs = pruning_3dgs_attr(
         points_3dgs, filtered_features_3dgs, features_3dgs, prune_methods, prune_params
     )
 
@@ -182,17 +182,11 @@ if __name__ == "__main__":
         help="Number of workers for parallel processing",
     )
     parser.add_argument(
-        "--pruning_ratio",
-        default=0.0,
-        type=float,
-        help="Final ratio of points to prune based on importance scores (bottom X%)",
-    )
-    parser.add_argument(
-        "--attr_weight",
+        "--attr_pruning_ratio",
         nargs=3,
         type=float,
-        default=[0.5, 0.3, 0.2],
-        help="Weights for scale, opacity, rotation in hybrid pruning (default: 0.5 0.3 0.2). Set to 0 to disable pruning for that attribute.",
+        default=[0.0, 0.0, 0.0],
+        help="Pruning ratios for scale, opacity, rotation (default: 0.0 0.0 0.0). Set ratio > 0 to enable pruning for that attribute.",
     )
     parser.add_argument(
         "--pdistance",
@@ -225,12 +219,18 @@ if __name__ == "__main__":
     prune_params = config['prune_params']
     k_neighbors = prune_params['k_neighbors']
     prune_params['pointcept_max_distance'] = args.pdistance
-    prune_params['pruning_ratio'] = args.pruning_ratio
-    prune_params['w_scale'], prune_params['w_rotation'], prune_params['w_opacity'] = args.attr_weight
 
-    # Prune methods 설정 (pointcept_distance만 유지)
+
+    # Prune methods 설정
+    scale_ratio, opacity_ratio, rotation_ratio = args.attr_pruning_ratio
     prune_methods = {
         'pointcept_distance': args.pdistance > 0,
+        'scale': scale_ratio > 0,
+        'scale_ratio': scale_ratio,
+        'opacity': opacity_ratio > 0,
+        'opacity_ratio': opacity_ratio,
+        'rotation': rotation_ratio > 0,
+        'rotation_ratio': rotation_ratio,
     }
 
     # Data type에 따른 메타 파일 선택

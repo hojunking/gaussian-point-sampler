@@ -199,7 +199,46 @@ def remove_duplicates(points_3dgs, points_pointcept, normals_3dgs, labels_3dgs, 
     colors_3dgs = colors_3dgs[mask]
     return points_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs
 
-def voxelize_3dgs(points_3dgs, features_3dgs, voxel_size=0.02, k_neighbors=5):
+def average_quaternions(quaternions):
+    """
+    Quaternion 배열의 평균 계산.
+    Args:
+        quaternions: (N, 4) 배열
+    Returns:
+        avg_quaternion: [w, x, y, z]
+    """
+    avg = np.mean(quaternions, axis=0)
+    norm = np.linalg.norm(avg)
+    return avg / (norm + 1e-8)
+
+def quaternion_to_direction(quaternion):
+    """
+    쿼터니언을 방향 벡터(3차원)로 변환.
+    
+    Args:
+        quaternion (np.ndarray): 쿼터니언 배열 [N, 4] (w, x, y, z).
+    
+    Returns:
+        np.ndarray: 방향 벡터 배열 [N, 3], 단위 벡터.
+    """
+    # 쿼터니언 정규화
+    norm = np.linalg.norm(quaternion, axis=1, keepdims=True)
+    quaternion = np.divide(quaternion, norm, where=norm != 0, out=np.zeros_like(quaternion))
+    w, x, y, z = quaternion[:, 0], quaternion[:, 1], quaternion[:, 2], quaternion[:, 3]
+
+    # 기준 벡터 [0, 0, 1]에 회전 적용
+    directions = np.zeros((len(quaternion), 3))
+    directions[:, 0] = 2 * (x * z + w * y)
+    directions[:, 1] = 2 * (y * z - w * x)
+    directions[:, 2] = 1 - 2 * (x * x + y * y)
+
+    # 방향 벡터 정규화
+    norm = np.linalg.norm(directions, axis=1, keepdims=True)
+    directions = np.divide(directions, norm, where=norm != 0, out=np.zeros_like(directions))
+    
+    return directions
+
+def voxelize_3dgs(points_3dgs, features_3dgs, voxel_size=0.02, k_neighbors=None, k_neighbors_max = 15):
     print(f"Voxelizing 3DGS points with voxel_size={voxel_size}...")
     num_points_before = len(points_3dgs)
 
@@ -211,6 +250,11 @@ def voxelize_3dgs(points_3dgs, features_3dgs, voxel_size=0.02, k_neighbors=5):
     pcd_voxelized = pcd.voxel_down_sample(voxel_size=voxel_size)
     points_voxelized = np.asarray(pcd_voxelized.points, dtype=np.float32)
 
+    # k_neighbors 동적 설정
+    avg_points_per_voxel = len(points_3dgs) / len(points_voxelized) if len(points_voxelized) > 0 else 1
+    k_neighbors = max(k_neighbors_max, min(10, int(np.sqrt(avg_points_per_voxel))))
+    print(f"Using k_neighbors={k_neighbors} for voxelization...")
+
     # 원본 점과 Voxelized 점 간의 매핑 계산
     pcd_original = o3d.geometry.PointCloud()
     pcd_original.points = o3d.utility.Vector3dVector(points_3dgs)
@@ -221,6 +265,34 @@ def voxelize_3dgs(points_3dgs, features_3dgs, voxel_size=0.02, k_neighbors=5):
         indices.append(idx)
     indices = np.array(indices)  # (N_voxelized, k_neighbors)
 
+    # 속성 집계
+    features_voxelized = np.zeros((len(points_voxelized), 7), dtype=np.float32)  # [scale_x, scale_y, scale_z, opacity, dir_x, dir_y, dir_z]
+    for i in range(len(points_voxelized)):
+        neighbor_features = features_3dgs[indices[i]]  # (k_neighbors, 8)
+
+        # Scale: 극단값 제거 후 평균값이 가장 큰 점 선택
+        scale_values = neighbor_features[:, 0:3]  # (k_neighbors, 3)
+        scale_means = np.mean(scale_values, axis=1)  # (k_neighbors,)
+        # 극단값 제거 (상위 1%, 하위 1%)
+        lower_bound, upper_bound = np.percentile(scale_means, [1, 99])
+        valid_mask = (scale_means >= lower_bound) & (scale_means <= upper_bound)
+
+        if np.sum(valid_mask) > 0:
+            valid_indices = np.where(valid_mask)[0]
+            max_mean_idx = valid_indices[np.argmax(scale_means[valid_mask])]
+        else:
+            max_mean_idx = np.argmax(scale_means)  # 유효한 점이 없으면 전체에서 선택
+        features_voxelized[i, 0:3] = scale_values[max_mean_idx]
+
+        # Opacity: 평균값 사용
+        features_voxelized[i, 3] = np.mean(neighbor_features[:, 3])
+        features_voxelized[i, 3] = np.clip(features_voxelized[i, 3], 0, 1)
+
+        # Rotation: Quaternion 평균화 후 Direction 벡터로 변환
+        rotation_values = neighbor_features[:, 4:8]  # (k_neighbors, 4)
+        avg_quaternion = average_quaternions(rotation_values)
+        features_voxelized[i, 4:7] = quaternion_to_direction(avg_quaternion[np.newaxis, :])[0]
+    
     # 전처리된 속성 평균화
     features_voxelized = np.zeros((len(points_voxelized), features_3dgs.shape[1]), dtype=np.float32)
     for i in range(len(points_voxelized)):
@@ -232,9 +304,69 @@ def voxelize_3dgs(points_3dgs, features_3dgs, voxel_size=0.02, k_neighbors=5):
         rotation_norms = np.linalg.norm(rotation_voxelized, axis=1, keepdims=True)
         features_voxelized[:, 4:7] = np.divide(rotation_voxelized, rotation_norms, where=rotation_norms > 0, out=rotation_voxelized)
 
-
     print(f"Voxelization complete: Before {num_points_before} points, After {len(points_voxelized)} points")
     return points_voxelized, features_voxelized
+
+
+def fps_knn_sampling(points, features, sample_ratio, k_neighbors=5, aggregation_method='max'):
+    """
+    FPS와 kNN을 사용한 샘플링 후 속성 집계.
+    Args:
+        points: (N, 3) 3DGS 점 좌표
+        features: (N, 8) 3DGS 속성 (Scale: 0:3, Opacity: 3:4, Rotation: 4:8)
+        sample_ratio: 샘플링 비율 (0~1)
+        k_neighbors: kNN 이웃 수
+        aggregation_method: 'max' 또는 'mean'로 집계 방법 선택
+    Returns:
+        sampled_points: 샘플링된 점 좌표
+        sampled_features: 샘플링된 점의 속성 (Scale: 평균 최대값, Opacity: max 또는 mean, Rotation: 평균화 후 변환)
+    """
+    # 1. FPS 샘플링
+    N = len(points)
+    sample_size = max(1, int(N * sample_ratio))  # 최소 1개 점 보장
+
+    indices = np.zeros(sample_size, dtype=np.int64)
+    distances = np.full(N, np.inf)
+    indices[0] = np.random.randint(0, N)  # 첫 점 무작위 선택
+
+    for i in range(1, sample_size):
+        last_point = points[indices[i-1]]
+        dist = np.sum((points - last_point) ** 2, axis=1)
+        distances = np.minimum(distances, dist)
+        indices[i] = np.argmax(distances)
+
+    sampled_points = points[indices]
+
+    # 2. kNN으로 이웃 점 찾기
+    knn = NearestNeighbors(n_neighbors=k_neighbors).fit(points)
+    _, neighbor_indices = knn.kneighbors(sampled_points)
+
+    # 3. 속성 집계
+    sampled_features = np.zeros((sample_size, 7))  # [scale_x, scale_y, scale_z, opacity, dir_x, dir_y, dir_z]
+    for i in range(sample_size):
+        neighbors = neighbor_indices[i]
+        neighbor_features = features[neighbors]  # (k_neighbors, 8)
+
+        # Scale: 3차원 평균 계산 후 최대값 선택
+        scale_means = np.mean(neighbor_features[:, 0:3], axis=1)  # (k_neighbors,)
+        max_mean_idx = np.argmax(scale_means)
+        sampled_features[i, 0:3] = neighbor_features[max_mean_idx, 0:3]
+
+        # Opacity: max 또는 mean 적용
+        if aggregation_method == 'max':
+            sampled_features[i, 3] = np.max(neighbor_features[:, 3])
+        else:  # 'mean'
+            sampled_features[i, 3] = np.mean(neighbor_features[:, 3])
+        sampled_features[i, 3] = np.clip(sampled_features[i, 3], 0, 1)
+
+        # Rotation: Quaternion 평균화 후 Direction 벡터로 변환
+        rotation_values = neighbor_features[:, 4:8]  # (k_neighbors, 4)
+        avg_quaternion = average_quaternions(rotation_values)
+        sampled_features[i, 4:7] = quaternion_to_direction(avg_quaternion[np.newaxis, :])[0]
+
+    print(f"FPS + kNN Sampling: Before {N} points, After {sample_size} points, Method: {aggregation_method}")
+    return sampled_points, sampled_features
+
 
 def save_ply(points, colors, labels, output_path, save_separate_labels=False, points_pointcept=None, colors_pointcept=None, points_3dgs=None):
     """
