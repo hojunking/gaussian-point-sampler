@@ -2,6 +2,8 @@
 import open3d as o3d
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
+from utils import process_rotation
+
 
 def preprocess_3dgs_attributes(raw_features_3dgs, normalize_scale=True):
     """
@@ -53,10 +55,45 @@ def preprocess_3dgs_attributes(raw_features_3dgs, normalize_scale=True):
     features_3dgs = np.hstack((scale_processed, opacity_processed, rotation))  # [N, 8]
     return features_3dgs
 
-def augment_pointcept_with_3dgs_attributes(points_pointcept, points_3dgs, features_3dgs, k_neighbors=5, use_features=('scale',)):
+def augment_pointcept_with_3dgs_attributes(points_pointcept, points_3dgs, features_3dgs, k_neighbors=5):
     # KNN으로 이웃 찾기
     nbrs = NearestNeighbors(n_neighbors=k_neighbors, algorithm='auto').fit(points_3dgs)
     distances, indices = nbrs.kneighbors(points_pointcept)
+
+    # 사용할 features 선택 (Pointcept에 전달용)
+    selected_features_pointcept = []
+    feature_idx = 0
+
+    # Scale 속성 (Pointcept에 전달)
+    scale_3dgs = features_3dgs[:, feature_idx:feature_idx + 3]  # [N, 3]
+    scale_neighbors = scale_3dgs[indices]  # [M, k_neighbors, 3]
+    scale_augmented = np.mean(scale_neighbors, axis=1)  # [M, 3]
+    selected_features_pointcept.append(scale_augmented)
+    feature_idx += 3
+
+    # Opacity 속성 (Pointcept에 전달)
+    opacity_3dgs = features_3dgs[:, feature_idx:feature_idx + 1]  # [N, 1]
+    opacity_neighbors = opacity_3dgs[indices]  # [M, k_neighbors, 1]
+    opacity_augmented = np.mean(opacity_neighbors, axis=1)  # [M, 1]
+    selected_features_pointcept.append(opacity_augmented)
+    feature_idx += 1
+
+    # Rotation 속성 (Pointcept에 전달)
+    rotation_3dgs = features_3dgs[:, feature_idx:feature_idx + 4]  # [N, 4] (Quaternion)
+    rotation_neighbors = rotation_3dgs[indices]  # [M, k_neighbors, 4]
+    rotation_augmented = np.zeros((len(points_pointcept), 3), dtype=np.float32)  # [M, 3] 초기화
+    for j in range(len(points_pointcept)):
+        rotation_augmented[j] = process_rotation(rotation_neighbors[j])
+    selected_features_pointcept.append(rotation_augmented)
+    # 선택된 features 연결
+    if selected_features_pointcept:
+        augmented_features = np.concatenate(selected_features_pointcept, axis=-1)  # [M, D]
+    else:
+        augmented_features = np.zeros((len(points_pointcept), 0), dtype=np.float32)
+
+    return augmented_features
+
+def select_3dgs_features(features_pointcept, features_3dgs, use_features=('scale',)):
 
     # 사용할 features 선택 (Pointcept에 전달용)
     selected_features_pointcept = []
@@ -64,46 +101,31 @@ def augment_pointcept_with_3dgs_attributes(points_pointcept, points_3dgs, featur
     feature_idx = 0
 
     if 'scale' in use_features:
-        # Scale 속성 (Pointcept에 전달)
-        scale_3dgs = features_3dgs[:, feature_idx:feature_idx + 3]  # [N, 3]
-        scale_neighbors = scale_3dgs[indices]  # [M, k_neighbors, 3]
-        scale_augmented = np.mean(scale_neighbors, axis=1)  # [M, 3]
-        selected_features_pointcept.append(scale_augmented)
-        # Scale 속성 (3DGS 필터링)
-        selected_features_3dgs.append(scale_3dgs)
+        selected_features_3dgs.append(features_3dgs[:, feature_idx:feature_idx + 3])
+        selected_features_pointcept.append(features_pointcept[:, feature_idx:feature_idx + 3] )
         feature_idx += 3
 
     if 'opacity' in use_features:
-        # Opacity 속성 (Pointcept에 전달)
-        opacity_3dgs = features_3dgs[:, feature_idx:feature_idx + 1]  # [N, 1]
-        opacity_neighbors = opacity_3dgs[indices]  # [M, k_neighbors, 1]
-        opacity_augmented = np.mean(opacity_neighbors, axis=1)  # [M, 1]
-        selected_features_pointcept.append(opacity_augmented)
-        # Opacity 속성 (3DGS 필터링)
-        selected_features_3dgs.append(opacity_3dgs)
+        selected_features_3dgs.append(features_3dgs[:, feature_idx:feature_idx + 1])
+        selected_features_pointcept.append(features_pointcept[:, feature_idx:feature_idx + 1])
         feature_idx += 1
 
     if 'rotation' in use_features:
-        # Rotation 속성 (Pointcept에 전달)
-        rotation_3dgs = features_3dgs[:, feature_idx:feature_idx + 3]  # [N, 3]
-        rotation_neighbors = rotation_3dgs[indices]  # [M, k_neighbors, 3]
-        rotation_augmented = np.mean(rotation_neighbors, axis=1)  # [M, 3]
-        # 방향 벡터 정규화
-        norm = np.linalg.norm(rotation_augmented, axis=1, keepdims=True)
-        rotation_augmented = np.divide(rotation_augmented, norm, where=norm != 0, out=np.zeros_like(rotation_augmented))
-        selected_features_pointcept.append(rotation_augmented)
-        # Rotation 속성 (3DGS 필터링)
-        selected_features_3dgs.append(rotation_3dgs)
+        selected_features_3dgs.append(features_3dgs[:, feature_idx:feature_idx + 3])
+        selected_features_pointcept.append(features_pointcept[:, feature_idx:feature_idx + 3])
 
-    # 선택된 features 연결
-    if selected_features_pointcept:
-        augmented_features = np.concatenate(selected_features_pointcept, axis=-1)  # [M, D]
-        filtered_features_3dgs = np.concatenate(selected_features_3dgs, axis=-1)  # [N, D]
+    # 비어있을 경우 기본 배열 반환
+    if not selected_features_pointcept:
+        filtered_pointcept_features = np.zeros((features_pointcept.shape[0], 0), dtype=np.float32)
     else:
-        augmented_features = np.zeros((len(points_pointcept), 0), dtype=np.float32)
-        filtered_features_3dgs = np.zeros((len(points_3dgs), 0), dtype=np.float32)
+        filtered_pointcept_features = np.concatenate(selected_features_pointcept, axis=-1)  # [M, D]
 
-    return augmented_features, filtered_features_3dgs
+    if not selected_features_3dgs:
+        filtered_features_3dgs = np.zeros((features_3dgs.shape[0], 0), dtype=np.float32)
+    else:
+        filtered_features_3dgs = np.concatenate(selected_features_3dgs, axis=-1)  # [N, D]
+
+    return filtered_pointcept_features, filtered_features_3dgs
 
 
 def remove_duplicates(points_3dgs, points_pointcept, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs, features_3dgs):
@@ -160,117 +182,14 @@ def pdistance_pruning(points_3dgs, features_3dgs, points_pointcept, prune_params
 
     return points_3dgs, features_3dgs
 
-# def pruning_3dgs_attr(points_3dgs, filtered_features_3dgs, features_3dgs, prune_methods, prune_params):
-#     scores = {}
 
-#     # 1. Scale-based Score
-#     if prune_params.get('w_scale', 0.0) > 0 and features_3dgs is not None:
-#         scales = features_3dgs[:, 0:3]
-#         scale_magnitudes = np.linalg.norm(scales, axis=-1)
-#         scores['scale'] = 1 - (scale_magnitudes - scale_magnitudes.min()) / (scale_magnitudes.max() - scale_magnitudes.min() + 1e-8)
-
-#     # 2. Opacity-based Score
-#     if prune_params.get('w_opacity', 0.0) > 0 and features_3dgs is not None:
-#         beta = 8.0  # 스케일링 팩터
-#         scores['opacity'] = beta * features_3dgs[:, 3]  # 이미 정규화된 값 스케일링
-#         #scores['opacity'] = np.clip(scores['opacity'], 0, 1)  # 범위 보장
-    
-#     # 3. Rotation Consistency-based Score
-#     if prune_params.get('w_rotation', 0.0) > 0 and features_3dgs is not None:
-#         rotation_3dgs = features_3dgs[:, -3:]
-#         rotation_3dgs = rotation_3dgs * 2 - 1
-
-#         k_neighbors = prune_params.get('k_neighbors', 5)
-#         knn = NearestNeighbors(n_neighbors=k_neighbors + 1).fit(points_3dgs)
-#         distances, indices = knn.kneighbors(points_3dgs)
-
-#         consistency_scores = np.zeros(points_3dgs.shape[0])
-#         for i in range(points_3dgs.shape[0]):
-#             neighbor_idx = indices[i, 1:]
-#             rot_i = rotation_3dgs[i]
-#             rot_neighbors = rotation_3dgs[neighbor_idx]
-#             cos_sim = np.sum(rot_i * rot_neighbors, axis=1) / (
-#                 np.linalg.norm(rot_i) * np.linalg.norm(rot_neighbors, axis=1) + 1e-8
-#             )
-#             consistency_scores[i] = np.mean(cos_sim)
-
-#         scores['rotation'] = (consistency_scores - consistency_scores.min()) / (consistency_scores.max() - consistency_scores.min() + 1e-8)
-
-#     return scores
-
-# def pruning_3dgs_attr_hybrid(points_3dgs, filtered_features_3dgs, features_3dgs, prune_methods, prune_params):
-#     print(f"Before 3DGS-attr hybrid pruning, 3DGS points: {len(points_3dgs)}")
-    
-#     scores = pruning_3dgs_attr(points_3dgs, filtered_features_3dgs, features_3dgs, prune_methods, prune_params)
-
-#     # 분포 정규화
-#     for method in scores:
-#         score = scores[method]
-#         mean = np.mean(score)
-#         std = np.std(score) + 1e-8
-#         scores[method] = (score - mean) / std
-#         scores[method] = (scores[method] - scores[method].min()) / (scores[method].max() - scores[method].min() + 1e-8)
-    
-#     weights = {
-#         'scale': prune_params.get('w_scale', 0.0),
-#         'opacity': prune_params.get('w_opacity', 0.0),
-#         'rotation': prune_params.get('w_rotation', 0.0)
-#     }
-
-#     total_weight = sum(weights.values())
-#     if total_weight > 0:
-#         for key in weights:
-#             weights[key] /= total_weight
-#     else:
-#         raise ValueError("At least one pruning method must be enabled with non-zero weight.")
-
-#     importance_scores = np.zeros(len(points_3dgs))
-#     for method, score in scores.items():
-#         importance_scores += weights[method] * score
-
-#     pruning_ratio = prune_params.get('pruning_ratio', 0.0)
-#     if pruning_ratio > 0:
-#         threshold = np.percentile(importance_scores, 100 * pruning_ratio)
-#         mask = importance_scores >= threshold
-#         print(f"Hybrid Pruning: Pruned {np.sum(~mask)} points with importance score < {threshold:.4f}, Remaining {np.sum(mask)} points")
-        
-#         pruned_indices = np.where(~mask)[0]
-#         if len(pruned_indices) > 0:
-#             contrib = {}
-#             for method in weights:
-#                 if method in scores:
-#                     contrib[method] = weights[method] * scores[method][pruned_indices] / (importance_scores[pruned_indices] + 1e-8)
-#                 else:
-#                     contrib[method] = np.zeros(len(pruned_indices))
-            
-#             avg_contrib = {method: np.mean(contrib[method]) for method in contrib}
-#             total_contrib = sum(avg_contrib.values())
-#             if total_contrib > 0:
-#                 contrib_percent = {method: (avg_contrib[method] / total_contrib) * 100 for method in avg_contrib}
-#             else:
-#                 contrib_percent = {method: 0.0 for method in avg_contrib}
-            
-#             print(f"Pruning Contribution - Scale: {contrib_percent['scale']:.1f}%, Opacity: {contrib_percent['opacity']:.1f}%, Rotation: {contrib_percent['rotation']:.1f}%")
-#         else:
-#             print("No points were pruned, skipping contribution analysis.")
-#     else:
-#         mask = np.ones(len(points_3dgs), dtype=bool)
-#         print("No final pruning applied (pruning_ratio = 0).")
-
-#     points_3dgs = points_3dgs[mask]
-#     filtered_features_3dgs = filtered_features_3dgs[mask]
-#     features_3dgs = features_3dgs[mask]
-
-#     print(f"Final 3DGS points after hybrid pruning: {len(points_3dgs)} (Pruned {len(mask) - np.sum(mask)} points in total)")
-#     return points_3dgs, filtered_features_3dgs
-
-def pruning_3dgs_attr(points_3dgs, filtered_features_3dgs, features_3dgs, prune_methods, prune_params):
+def pruning_3dgs_attr(points_3dgs, features_3dgs, prune_methods, prune_params):
     print(f"Before 3DGS-attr pruning, 3DGS points: {len(points_3dgs)}")
     mask = np.ones(len(points_3dgs), dtype=bool)  # 최종 마스크 초기화
     prev_pruned = 0  # 이전 단계까지 Pruned된 점 수 초기화
 
     # 1. Scale-based Pruning
-    if prune_methods.get('scale', False) and features_3dgs is not None:
+    if prune_methods.get('scale', False):
         scales = features_3dgs[:, 0:3]  # 전처리된 scale 값 사용
         if prune_methods.get('scale_ratio', 0.0) > 0:
             scale_magnitudes = np.linalg.norm(scales, axis=-1)  # 전체 점에 대해 계산
@@ -282,7 +201,7 @@ def pruning_3dgs_attr(points_3dgs, filtered_features_3dgs, features_3dgs, prune_
             prev_pruned = curr_pruned  # 이전 Pruned 점 수 업데이트
 
     # 2. Opacity-based Pruning
-    if prune_methods.get('opacity', False) and features_3dgs is not None:
+    if prune_methods.get('opacity', False):
         opacities = features_3dgs[:, 3]  # 전처리된 opacity 값 사용
         if prune_methods.get('opacity_ratio', 0.0) > 0:
             threshold = np.percentile(opacities, 100 * prune_methods['opacity_ratio'])
@@ -294,10 +213,9 @@ def pruning_3dgs_attr(points_3dgs, filtered_features_3dgs, features_3dgs, prune_
             prev_pruned = curr_pruned  # 이전 Pruned 점 수 업데이트
 
     # 3. Rotation Consistency-based Pruning
-    if prune_methods.get('rotation', False) and features_3dgs is not None:
+    if prune_methods.get('rotation', False):
         # Rotation 추출
         rotation_3dgs = features_3dgs[:, -3:]  # [N, 3], [0, 1] 범위
-        rotation_3dgs = rotation_3dgs * 2 - 1  # [-1, 1]로 복원
 
         # KNN으로 Consistency Score 계산
         k_neighbors = prune_params.get('k_neighbors', 5)  # 기본값 5
@@ -326,8 +244,7 @@ def pruning_3dgs_attr(points_3dgs, filtered_features_3dgs, features_3dgs, prune_
 
     # 최종 점 업데이트
     points_3dgs = points_3dgs[mask]
-    filtered_features_3dgs = filtered_features_3dgs[mask]
     features_3dgs = features_3dgs[mask]  # features_3dgs도 업데이트
 
     print(f"Final 3DGS points after pruning: {len(points_3dgs)} (Pruned {len(mask) - np.sum(mask)} points in total)")
-    return points_3dgs, filtered_features_3dgs
+    return points_3dgs, features_3dgs

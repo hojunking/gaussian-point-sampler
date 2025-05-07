@@ -58,12 +58,15 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, k_neigh
     print(f"Saving 3DGS points to PLY...")
     output_dir_path = os.path.join(output_dir, exp)
     os.makedirs(output_dir_path, exist_ok=True)
-    output_ply_path = os.path.join(output_dir_path, f"{exp}_3dgs.ply")
+    output_ply_path = os.path.join(output_dir_path, f"{exp}.ply")
     save_ply(
         points_3dgs, colors_3dgs, labels_3dgs, output_ply_path,
-        save_separate_labels=True  # 라벨 색상 기반 별도 파일 생성
+        save_separate_labels=True,  # 라벨 색상 기반 별도 파일 생성
+        points_pointcept=points_pointcept,
+        colors_pointcept=colors_pointcept,
     )
-    print(f"Saved 3DGS PLY to {output_ply_path}")
+    #print(f"Saved 3DGS PLY to {output_ply_path}")
+
 
 def process_single_scene(scene, input_root, output_root, exp, path_3dgs_root, k_neighbors=5, ignore_threshold=0.6, voxel_size=0.02):
     """

@@ -12,5 +12,5 @@ export PYTHONPATH=$PYTHONPATH:/home/knuvi/Desktop/song/Pointcept
 python 3DGS-only_ply-save.py \
   --scene scene0011_00 \
   --output_root /home/knuvi/Desktop/song/gaussian-point-sampler/test/test_samples10 \
-  --exp only_3dgs \
-  --voxel_size 0 \
+  --exp only_3dgs_vox04 \
+  --voxel_size 0.04 \

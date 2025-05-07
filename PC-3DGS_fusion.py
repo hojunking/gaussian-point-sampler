@@ -6,10 +6,10 @@ import numpy as np
 from tqdm import tqdm
 
 # 기존 모듈 임포트
-from utils import load_pointcept_data, load_3dgs_data, voxelize_3dgs, update_3dgs_attributes
-from fusion_utils import augment_pointcept_with_3dgs_attributes, preprocess_3dgs_attributes, remove_duplicates, pdistance_pruning, pruning_3dgs_attr
+from utils import load_pointcept_data, load_3dgs_data, voxelize_3dgs, update_3dgs_attributes, fps_knn_sampling
+from fusion_utils import augment_pointcept_with_3dgs_attributes, preprocess_3dgs_attributes, remove_duplicates, pdistance_pruning, pruning_3dgs_attr, select_3dgs_features
 
-def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_methods=None, prune_params=None, k_neighbors=5, ignore_threshold=0.6, voxel_size=0.02, use_features=('scale', 'opacity', 'rotation')):
+def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_methods=None, prune_params=None, k_neighbors=10, ignore_threshold=0.6, voxel_size=0.02, use_features=('scale', 'opacity', 'rotation')):
     # 1. Pointcept 데이터 로드 (.npy 파일에서)
     pointcept_data = load_pointcept_data(pointcept_dir)
     points_pointcept = pointcept_data['coord']
@@ -31,22 +31,30 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
         points_3dgs, features_3dgs, points_pointcept, prune_params
     )
 
+    # 6. 3DGS-attr transfer
+    print("Augmenting Pointcept points with 3DGS attributes...")
+    features_pointcept  = augment_pointcept_with_3dgs_attributes(
+        points_pointcept, points_3dgs, features_3dgs, k_neighbors=k_neighbors
+    )
+    
     # 5. 3DGS 데이터 Voxelization (옵션)
     voxelize = voxel_size != 0  # voxel_size가 0이 아니면 voxelize 활성화
     if voxelize:
         print("Applying Voxelization to 3DGS points...")
         points_3dgs, features_3dgs = voxelize_3dgs(
             points_3dgs, features_3dgs, voxel_size=voxel_size, k_neighbors_max=20)
-    
-    # 6. 3DGS-attr transfer
-    print("Augmenting Pointcept points with 3DGS attributes...")
-    features_pointcept, filtered_features_3dgs  = augment_pointcept_with_3dgs_attributes(
-        points_pointcept, points_3dgs, features_3dgs, k_neighbors=k_neighbors, use_features=use_features
-    )
+    else:
+        print("Applying FPS-kNN to 3DGS points...")
+        points_3dgs, features_3dgs = fps_knn_sampling(
+            points_3dgs, features_3dgs, sample_ratio=0.05, aggregation_method='mean')
     
     # 7. 3DGS-attr Pruning
     points_3dgs, features_3dgs = pruning_3dgs_attr(
-        points_3dgs, filtered_features_3dgs, features_3dgs, prune_methods, prune_params
+        points_3dgs, features_3dgs, prune_methods, prune_params
+    )
+
+    features_pointcept, features_3dgs = select_3dgs_features(
+        features_pointcept, features_3dgs, use_features=use_features
     )
 
     # 8. Point cloud color, normals, labels transfer 
