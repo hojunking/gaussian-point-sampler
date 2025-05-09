@@ -4,11 +4,11 @@ import numpy as np
 from plyfile import PlyData, PlyElement
 
 # 기존 모듈 임포트
-from utils import load_pointcept_data, load_3dgs_data, update_3dgs_attributes, voxelize_3dgs, save_ply
-from fusion_utils import augment_pointcept_with_3dgs_attributes, preprocess_3dgs_attributes, remove_duplicates, pdistance_pruning, pruning_3dgs_attr_hybrid
+from utils import load_pointcept_data, load_3dgs_data, voxelize_3dgs, update_3dgs_attributes, fps_knn_sampling, save_ply
+from fusion_utils import augment_pointcept_with_3dgs_attributes, preprocess_3dgs_attributes, remove_duplicates, pdistance_pruning, pruning_3dgs_attr, select_3dgs_features
 
 def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_methods=None, prune_params=None, k_neighbors=5, ignore_threshold=0.6, voxel_size=0.02, use_features=('scale', 'opacity', 'rotation')):
-    # 1. Pointcept 데이터 로드 (.npy 파일에서)
+     # 1. Pointcept 데이터 로드 (.npy 파일에서)
     pointcept_data = load_pointcept_data(pointcept_dir)
     points_pointcept = pointcept_data['coord']
     colors_pointcept = pointcept_data['color']
@@ -25,27 +25,34 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_m
     features_3dgs = preprocess_3dgs_attributes(raw_features_3dgs)
 
     # 4. 3DGS pdistance Pruning
-    if prune_params['pointcept_max_distance'] != 0:
-        points_3dgs, features_3dgs = pdistance_pruning(
-            points_3dgs, features_3dgs, points_pointcept, prune_params
-        )
+    points_3dgs, features_3dgs = pdistance_pruning(
+        points_3dgs, features_3dgs, points_pointcept, prune_params
+    )
 
+    # 6. 3DGS-attr transfer
+    print("Augmenting Pointcept points with 3DGS attributes...")
+    features_pointcept  = augment_pointcept_with_3dgs_attributes(
+        points_pointcept, points_3dgs, features_3dgs, k_neighbors=k_neighbors
+    )
+    
     # 5. 3DGS 데이터 Voxelization (옵션)
     voxelize = voxel_size != 0  # voxel_size가 0이 아니면 voxelize 활성화
     if voxelize:
         print("Applying Voxelization to 3DGS points...")
         points_3dgs, features_3dgs = voxelize_3dgs(
-            points_3dgs, features_3dgs, voxel_size=voxel_size, k_neighbors=5)
-    
-    # 6. 3DGS-attr transfer
-    print("Augmenting Pointcept points with 3DGS attributes...")
-    features_pointcept, filtered_features_3dgs  = augment_pointcept_with_3dgs_attributes(
-        points_pointcept, points_3dgs, features_3dgs, k_neighbors=k_neighbors, use_features=use_features
-    )
+            points_3dgs, features_3dgs, voxel_size=voxel_size, k_neighbors_max=20)
+    else:
+        print("Applying FPS-kNN to 3DGS points...")
+        points_3dgs, features_3dgs = fps_knn_sampling(
+            points_3dgs, features_3dgs, sample_ratio=0.05, aggregation_method='mean')
     
     # 7. 3DGS-attr Pruning
-    points_3dgs, features_3dgs = pruning_3dgs_attr_hybrid(
-        points_3dgs, filtered_features_3dgs, features_3dgs, prune_methods, prune_params
+    points_3dgs, features_3dgs = pruning_3dgs_attr(
+        points_3dgs, features_3dgs, prune_methods, prune_params
+    )
+
+    features_pointcept, features_3dgs = select_3dgs_features(
+        features_pointcept, features_3dgs, use_features=use_features
     )
 
     # 8. Point cloud color, normals, labels transfer 
@@ -80,11 +87,7 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_m
     print("Merging Pointcept and 3DGS points...")
     points_merged = np.vstack((points_pointcept, points_3dgs))
     colors_merged = np.vstack((colors_pointcept, colors_3dgs))
-    normals_merged = np.vstack((normals_pointcept, normals_3dgs))
     labels_merged = np.concatenate((labels_pointcept, labels_3dgs))
-    labels200_merged = np.concatenate((labels200_pointcept, labels200_3dgs))
-    instances_merged = np.concatenate((instances_pointcept, instances_3dgs))
-    features_merged = np.vstack((features_pointcept, features_3dgs))  # 3DGS 점의 원래 속성 유지
     print(f"Final merged points: {len(points_merged)} (Pointcept: {len(points_pointcept)}, 3DGS: {len(points_3dgs)})")
 
     # 11. PLY 파일로 저장
@@ -93,18 +96,10 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_m
     output_ply_path = os.path.join(output_dir_path, f"{exp}.ply")
     save_ply(
         points_merged, colors_merged, labels_merged, output_ply_path,
-        save_separate_labels=True,
-        points_pointcept=points_pointcept,
-        colors_pointcept=colors_pointcept,
-        points_3dgs=points_3dgs
+        points_pointcept=points_pointcept, colors_pointcept=colors_pointcept,
+        points_3dgs=points_3dgs, colors_3dgs=colors_3dgs
     )
 
-    # 3DGS 점 별도 저장 (라벨 포함)
-    dgs_ply_path = os.path.join(output_dir_path, f"{exp}_3dgs.ply")
-    save_ply(
-        points_3dgs, colors_3dgs, labels_3dgs, dgs_ply_path,
-        save_separate_labels=False
-    )
 
 def process_single_scene(scene, input_root, output_root, exp, path_3dgs_root, prune_methods, prune_params, k_neighbors=5, ignore_threshold=0.6, voxel_size=0.02, use_features=('scale', 'opacity', 'rotation')):
     try:
@@ -153,11 +148,11 @@ if __name__ == "__main__":
         help="Final ratio of points to prune based on importance scores (bottom X%)",
     )
     parser.add_argument(
-        "--attr_weight",
+        "--attr_pruning_ratio",
         nargs=3,
         type=float,
-        default=[0.5, 0.3, 0.2],
-        help="Weights for scale, opacity, rotation in hybrid pruning (default: 0.5 0.3 0.2). Set to 0 to disable pruning for that attribute.",
+        default=[0.0, 0.0, 0.0],
+        help="Pruning ratios for scale, opacity, rotation (default: 0.0 0.0 0.0). Set ratio > 0 to enable pruning for that attribute.",
     )
     parser.add_argument(
         "--pdistance",
@@ -187,14 +182,21 @@ if __name__ == "__main__":
 
     input_root = config['input_root']
     path_3dgs_root = config['path_3dgs_root']
+    meta_root = config['meta_root']
     prune_params = config['prune_params']
     k_neighbors = prune_params['k_neighbors']
     prune_params['pointcept_max_distance'] = args.pdistance
-    prune_params['pruning_ratio'] = args.pruning_ratio
-    prune_params['w_scale'], prune_params['w_rotation'], prune_params['w_opacity'] = args.attr_weight
     # Prune methods 설정
+    scale_ratio, opacity_ratio, rotation_ratio = args.attr_pruning_ratio
+
     prune_methods = {
         'pointcept_distance': args.pdistance > 0,
+        'scale': scale_ratio > 0,
+        'scale_ratio': scale_ratio,
+        'opacity': opacity_ratio > 0,
+        'opacity_ratio': opacity_ratio,
+        'rotation': rotation_ratio > 0,
+        'rotation_ratio': rotation_ratio,
     }
 
     # 단일 Scene 처리
@@ -207,7 +209,6 @@ if __name__ == "__main__":
         prune_methods,
         prune_params,
         k_neighbors=k_neighbors,
-        ignore_threshold=args.ignore_threshold,
         voxel_size=args.voxel_size,
         use_features=tuple(args.use_features)
     )

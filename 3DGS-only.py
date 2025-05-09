@@ -30,7 +30,7 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, k_neighbors=
     voxelize = voxel_size != 0  # voxel_size가 0이 아니면 voxelize 활성화
     if voxelize:
         print("Applying Voxelization to 3DGS points...")
-        points_3dgs, features_3dgs = voxelize_3dgs(
+        points_3dgs, _ = voxelize_3dgs(
             points_3dgs, features_3dgs, voxel_size=voxel_size, k_neighbors=5)
     
     # 8. Point cloud color, normals, labels transfer 
@@ -47,7 +47,7 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, k_neighbors=
     labels_3dgs = labels_3dgs[mask]
     labels200_3dgs = labels200_3dgs[mask]
     instances_3dgs = instances_3dgs[mask]
-    features_3dgs = features_3dgs[mask]  # 3DGS 속성도 필터링하여 동기화
+    #features_3dgs = features_3dgs[mask]  # 3DGS 속성도 필터링하여 동기화
 
     # 6.5. -1 라벨 3DGS 점 비율 출력
     ignore_count = np.sum(labels_3dgs == -1)
@@ -180,16 +180,16 @@ if __name__ == "__main__":
     with open(train_meta_file_path) as f:
         train_scenes = f.read().splitlines()
 
-    # process_scenes(
-    #     input_root,
-    #     args.output_root,
-    #     'train',
-    #     train_scenes,
-    #     path_3dgs_root,
-    #     k_neighbors=k_neighbors,
-    #     num_workers=args.num_workers,
-    #     voxel_size=args.voxel_size,
-    # )
+    process_scenes(
+        input_root,
+        args.output_root,
+        'train',
+        train_scenes,
+        path_3dgs_root,
+        k_neighbors=k_neighbors,
+        num_workers=args.num_workers,
+        voxel_size=args.voxel_size,
+    )
 
     # Val split 처리
     val_meta_file_path = os.path.join(meta_root, val_meta_file)

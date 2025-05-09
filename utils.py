@@ -338,39 +338,45 @@ def fps_knn_sampling(points, features, sample_ratio, k_neighbors=None, aggregati
     return sampled_points, sampled_features
 
 
-def save_ply(points, colors, labels, output_path, save_separate_labels=False, points_pointcept=None, colors_pointcept=None, points_3dgs=None):
+def save_ply(points_merged, colors_merged, labels_merged, output_path, points_pointcept=None, colors_pointcept=None, points_3dgs=None, colors_3dgs=None):
     """
-    점과 색상, 라벨을 PLY 파일로 저장.
+    병합된 점과 개별 점을 PLY 파일로 저장.
     
     Args:
-        points (np.ndarray): 점 좌표 (N, 3).
-        colors (np.ndarray): 점 색상 (N, 3), 0-255 범위.
-        labels (np.ndarray): 점 라벨 (N,).
-        output_path (str): 저장할 PLY 파일 경로.
-        save_separate_labels (bool): 라벨만 별도로 저장할지 여부.
-        points_pointcept (np.ndarray): Pointcept 점 좌표 (옵션).
-        colors_pointcept (np.ndarray): Pointcept 점 색상 (옵션).
-        points_3dgs (np.ndarray): 3DGS 점 좌표 (옵션).
+        points_merged (np.ndarray): 병합된 또는 3DGS 점 좌표 (N, 3).
+        colors_merged (np.ndarray): 병합된 또는 3DGS 점 색상 (N, 3), 0-255 범위.
+        labels_merged (np.ndarray): 병합된 또는 3DGS 점 라벨 (N,).
+        output_path (str): 저장할 기본 PLY 파일 경로 (예: 'path/exp.ply').
+        points_pointcept (np.ndarray, optional): Pointcept 점 좌표 (M, 3).
+        colors_pointcept (np.ndarray, optional): Pointcept 점 색상 (M, 3).
+        points_3dgs (np.ndarray, optional): 3DGS 점 좌표 (N, 3).
+        colors_3dgs (np.ndarray, optional): 3DGS 점 색상 (N, 3).
     """
-    # 점과 색상, 라벨 확인
-    assert points.shape[0] == colors.shape[0] == labels.shape[0], "Points, colors, and labels must have the same length"
-    assert points.shape[1] == 3, "Points must have 3 dimensions"
-    assert colors.shape[1] == 3, "Colors must have 3 dimensions"
+    # 필수 인자 차원 확인
+    assert points_merged.shape[0] == colors_merged.shape[0] == labels_merged.shape[0], "Merged points, colors, and labels must have the same length"
+    assert points_merged.shape[1] == 3 and colors_merged.shape[1] == 3, "Merged points and colors must have 3 dimensions"
 
-    # 라벨 색상 생성
-    unique_labels = np.unique(labels)
+    # 선택적 인자 차원 확인 (입력 시)
+    if points_pointcept is not None and colors_pointcept is not None:
+        assert points_pointcept.shape[0] == colors_pointcept.shape[0], "Pointcept points and colors must have the same length"
+        assert points_pointcept.shape[1] == 3 and colors_pointcept.shape[1] == 3, "Pointcept points and colors must have 3 dimensions"
+    if points_3dgs is not None and colors_3dgs is not None:
+        assert points_3dgs.shape[0] == colors_3dgs.shape[0], "3DGS points and colors must have the same length"
+        assert points_3dgs.shape[1] == 3 and colors_3dgs.shape[1] == 3, "3DGS points and colors must have 3 dimensions"
+
+    # 라벨 색상 생성 (merged_label.ply용)
+    unique_labels = np.unique(labels_merged)
     label_colors = {}
     
-    # -1 라벨에 눈에 띄는 색상 (밝은 노란색) 할당
+    # -1 라벨은 흰색으로 처리
     if -1 in unique_labels:
-        label_colors[-1] = np.array([255, 255, 0], dtype=np.uint8)  # 밝은 노란색
+        label_colors[-1] = np.array([255, 255, 255], dtype=np.uint8)  # 흰색
 
     # 나머지 라벨에 대해 색상 생성 (0 이상)
     for label in unique_labels:
-        if label != -1:  # -1은 이미 처리됨
-            # 고정된 색상 팔레트 사용 (예: 20개 클래스에 대해)
+        if label != -1:
             if label < 20:
-                # ScanNet 20 클래스 색상 팔레트 (예시, 실제 팔레트로 대체 가능)
+                # ScanNet 20 클래스 색상 팔레트 (예시)
                 palette = [
                     [255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0], [255, 0, 255],
                     [0, 255, 255], [128, 0, 0], [0, 128, 0], [0, 0, 128], [128, 128, 0],
@@ -379,61 +385,66 @@ def save_ply(points, colors, labels, output_path, save_separate_labels=False, po
                 ]
                 label_colors[label] = np.array(palette[label % len(palette)], dtype=np.uint8)
             else:
-                # 20 이상의 라벨은 랜덤 색상
                 label_colors[label] = np.random.randint(0, 256, size=3, dtype=np.uint8)
-
-    # 라벨 색상 분포 출력
-    print("Label colors distribution:")
-    for channel, channel_name in enumerate(['Red', 'Green', 'Blue']):
-        channel_values = [color[channel] for color in label_colors.values()]
-        print(f"{channel_name}: min={min(channel_values)}, max={max(channel_values)}")
 
     # 라벨 분포 출력
     print("Label distribution:")
     for label in unique_labels:
-        count = np.sum(labels == label)
+        count = np.sum(labels_merged == label)
         print(f"Label {label}: {count} points")
 
-    # PLY 데이터 생성
-    vertex = np.zeros(points.shape[0], dtype=[
+    # 1. Merged PLY (점 색상 유지)
+    vertex_merged = np.zeros(points_merged.shape[0], dtype=[
+        ('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
+        ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')
+    ])
+    vertex_merged['x'] = points_merged[:, 0].astype('f4')
+    vertex_merged['y'] = points_merged[:, 1].astype('f4')
+    vertex_merged['z'] = points_merged[:, 2].astype('f4')
+    vertex_merged['red'] = colors_merged[:, 0].astype('u1')
+    vertex_merged['green'] = colors_merged[:, 1].astype('u1')
+    vertex_merged['blue'] = colors_merged[:, 2].astype('u1')
+    el_merged = PlyElement.describe(vertex_merged, 'vertex')
+    PlyData([el_merged], text=True).write(output_path)
+    print(f"Saved merged PLY file to {output_path}")
+
+    # 2. Merged Label PLY (라벨 색상 사용)
+    vertex_merged_label = np.zeros(points_merged.shape[0], dtype=[
         ('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
         ('red', 'u1'), ('green', 'u1'), ('blue', 'u1'),
         ('label', 'i4')
     ])
-    vertex['x'] = points[:, 0].astype('f4')
-    vertex['y'] = points[:, 1].astype('f4')
-    vertex['z'] = points[:, 2].astype('f4')
-    
-    # 색상 설정
-    for i in range(len(points)):
-        vertex['red'][i] = label_colors[labels[i]][0]
-        vertex['green'][i] = label_colors[labels[i]][1]
-        vertex['blue'][i] = label_colors[labels[i]][2]
-    vertex['label'] = labels.astype('i4')
+    vertex_merged_label['x'] = points_merged[:, 0].astype('f4')
+    vertex_merged_label['y'] = points_merged[:, 1].astype('f4')
+    vertex_merged_label['z'] = points_merged[:, 2].astype('f4')
+    for i in range(len(points_merged)):
+        vertex_merged_label['red'][i] = label_colors[labels_merged[i]][0]
+        vertex_merged_label['green'][i] = label_colors[labels_merged[i]][1]
+        vertex_merged_label['blue'][i] = label_colors[labels_merged[i]][2]
+    vertex_merged_label['label'] = labels_merged.astype('i4')
+    el_merged_label = PlyElement.describe(vertex_merged_label, 'vertex')
+    merged_label_path = output_path.replace('.ply', '_label.ply')
+    PlyData([el_merged_label], text=True).write(merged_label_path)
+    print(f"Saved merged label PLY file to {merged_label_path}")
 
-    # PLY 파일 저장
-    el = PlyElement.describe(vertex, 'vertex')
-    PlyData([el], text=True).write(output_path)
-    print(f"Saved merged PLY file to {output_path}")
-
-    # 라벨만 별도로 저장
-    if save_separate_labels:
-        vertex_labels = np.zeros(points.shape[0], dtype=[
+    # 3. 3DGS PLY (3DGS 점만, 점 색상 유지, 선택적 생성)
+    if points_3dgs is not None and colors_3dgs is not None:
+        vertex_3dgs = np.zeros(points_3dgs.shape[0], dtype=[
             ('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
             ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')
         ])
-        vertex_labels['x'] = points[:, 0].astype('f4')
-        vertex_labels['y'] = points[:, 1].astype('f4')
-        vertex_labels['z'] = points[:, 2].astype('f4')
-        for i in range(len(points)):
-            vertex_labels['red'][i] = label_colors[labels[i]][0]
-            vertex_labels['green'][i] = label_colors[labels[i]][1]
-            vertex_labels['blue'][i] = label_colors[labels[i]][2]
-        el_labels = PlyElement.describe(vertex_labels, 'vertex')
-        PlyData([el_labels], text=True).write(output_path.replace('.ply', '_labels.ply'))
-        print(f"Saved labels-only PLY file to {output_path.replace('.ply', '_labels.ply')}")
+        vertex_3dgs['x'] = points_3dgs[:, 0].astype('f4')
+        vertex_3dgs['y'] = points_3dgs[:, 1].astype('f4')
+        vertex_3dgs['z'] = points_3dgs[:, 2].astype('f4')
+        vertex_3dgs['red'] = colors_3dgs[:, 0].astype('u1')
+        vertex_3dgs['green'] = colors_3dgs[:, 1].astype('u1')
+        vertex_3dgs['blue'] = colors_3dgs[:, 2].astype('u1')
+        el_3dgs = PlyElement.describe(vertex_3dgs, 'vertex')
+        dgs_path = output_path.replace('.ply', '_3dgs.ply')
+        PlyData([el_3dgs], text=True).write(dgs_path)
+        print(f"Saved 3DGS PLY file to {dgs_path}")
 
-    # Pointcept 점 별도 저장
+    # 4. Pointcept PLY (Pointcept 점만, 점 색상 유지, 선택적 생성)
     if points_pointcept is not None and colors_pointcept is not None:
         vertex_pointcept = np.zeros(points_pointcept.shape[0], dtype=[
             ('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
@@ -446,5 +457,6 @@ def save_ply(points, colors, labels, output_path, save_separate_labels=False, po
         vertex_pointcept['green'] = colors_pointcept[:, 1].astype('u1')
         vertex_pointcept['blue'] = colors_pointcept[:, 2].astype('u1')
         el_pointcept = PlyElement.describe(vertex_pointcept, 'vertex')
-        PlyData([el_pointcept], text=True).write(output_path.replace('.ply', '_pointcept.ply'))
-        print(f"Saved Pointcept PLY file to {output_path.replace('.ply', '_pointcept.ply')}")
+        pointcept_path = output_path.replace('.ply', '_pointcept.ply')
+        PlyData([el_pointcept], text=True).write(pointcept_path)
+        print(f"Saved Pointcept PLY file to {pointcept_path}")

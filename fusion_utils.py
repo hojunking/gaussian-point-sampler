@@ -194,7 +194,7 @@ def pruning_3dgs_attr(points_3dgs, features_3dgs, prune_methods, prune_params):
         if prune_methods.get('scale_ratio', 0.0) > 0:
             scale_magnitudes = np.linalg.norm(scales, axis=-1)  # 전체 점에 대해 계산
             threshold = np.percentile(scale_magnitudes, 100 * (1 - prune_methods['scale_ratio']))
-            scale_ratio_mask = scale_magnitudes <= threshold  # 상위 비율 제거
+            scale_ratio_mask = scale_magnitudes >= threshold  # 하위 비율 제거
             mask = mask & scale_ratio_mask
             curr_pruned = np.sum(~mask)  # 현재까지 Pruned된 점 수
             print(f"Scale Ratio Pruning: Pruned {curr_pruned} points with scale > {threshold:.4f}, Remaining {np.sum(mask)} points")

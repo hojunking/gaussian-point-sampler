@@ -31,12 +31,6 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
         points_3dgs, features_3dgs, points_pointcept, prune_params
     )
 
-    # 6. 3DGS-attr transfer
-    print("Augmenting Pointcept points with 3DGS attributes...")
-    features_pointcept  = augment_pointcept_with_3dgs_attributes(
-        points_pointcept, points_3dgs, features_3dgs, k_neighbors=k_neighbors
-    )
-    
     # 5. 3DGS 데이터 Voxelization (옵션)
     voxelize = voxel_size != 0  # voxel_size가 0이 아니면 voxelize 활성화
     if voxelize:
@@ -53,10 +47,6 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
         points_3dgs, features_3dgs, prune_methods, prune_params
     )
 
-    features_pointcept, features_3dgs = select_3dgs_features(
-        features_pointcept, features_3dgs, use_features=use_features
-    )
-
     # 8. Point cloud color, normals, labels transfer 
     print("Updating 3DGS attributes from Pointcept...")
     colors_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, mask = update_3dgs_attributes(
@@ -71,7 +61,6 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
     labels_3dgs = labels_3dgs[mask]
     labels200_3dgs = labels200_3dgs[mask]
     instances_3dgs = instances_3dgs[mask]
-    features_3dgs = features_3dgs[mask]  # 3DGS 속성도 필터링하여 동기화
 
     # 6.5. -1 라벨 3DGS 점 비율 출력
     ignore_count = np.sum(labels_3dgs == -1)
@@ -93,7 +82,6 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
     labels_merged = np.concatenate((labels_pointcept, labels_3dgs))
     labels200_merged = np.concatenate((labels200_pointcept, labels200_3dgs))
     instances_merged = np.concatenate((instances_pointcept, instances_3dgs))
-    features_merged = np.vstack((features_pointcept, features_3dgs))  # 3DGS 점의 원래 속성 유지
     print(f"Final merged points: {len(points_merged)} (Pointcept: {len(points_pointcept)}, 3DGS: {len(points_3dgs)})")
 
     # 9. Pointcept 포맷으로 저장 (.npy 파일)
@@ -104,7 +92,6 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, prune_method
         'segment20': labels_merged.astype(np.int64),
         'segment200': labels200_merged.astype(np.int64),
         'instance': instances_merged.astype(np.int64),
-        'features': features_merged.astype(np.float32),  # features.npy로 저장
     }
     os.makedirs(output_dir, exist_ok=True)
     for key, value in save_dict.items():
