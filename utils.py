@@ -78,6 +78,7 @@ def load_3dgs_data(path_3dgs):
     return points_3dgs, normals_3dgs, raw_features_3dgs
 
 def update_3dgs_attributes(points_3dgs, points_pointcept, colors_pointcept, normals_pointcept, labels_pointcept, labels200_pointcept, instances_pointcept, k_neighbors=10, use_label_consistency=True, ignore_threshold=0.6):
+    
     """
     3DGS 점의 속성을 Pointcept 점에서 복사.
     
@@ -157,6 +158,7 @@ def update_3dgs_attributes(points_3dgs, points_pointcept, colors_pointcept, norm
             if label_counts.max() < k_neighbors * ignore_threshold:  # 60% 이상 일관성 없으면 제외
                 mask[i] = False
 
+    
     return colors_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, mask
 
 def remove_duplicates(points_3dgs, points_pointcept, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs):
@@ -338,7 +340,7 @@ def fps_knn_sampling(points, features, sample_ratio, k_neighbors=None, aggregati
     return sampled_points, sampled_features
 
 
-def save_ply(points_merged, colors_merged, labels_merged, output_path, points_pointcept=None, colors_pointcept=None, points_3dgs=None, colors_3dgs=None):
+def save_ply(points_merged, colors_merged, labels_merged, output_path, points_pointcept=None, colors_pointcept=None, points_3dgs=None, colors_3dgs=None, features_3dgs=None):
     """
     병합된 점과 개별 점을 PLY 파일로 저장.
     
@@ -351,6 +353,7 @@ def save_ply(points_merged, colors_merged, labels_merged, output_path, points_po
         colors_pointcept (np.ndarray, optional): Pointcept 점 색상 (M, 3).
         points_3dgs (np.ndarray, optional): 3DGS 점 좌표 (N, 3).
         colors_3dgs (np.ndarray, optional): 3DGS 점 색상 (N, 3).
+        features_3dgs (np.ndarray, optional): 3DGS 점의 속성 (N, 7), [scale_x, scale_y, scale_z, opacity, dir_x, dir_y, dir_z].
     """
     # 필수 인자 차원 확인
     assert points_merged.shape[0] == colors_merged.shape[0] == labels_merged.shape[0], "Merged points, colors, and labels must have the same length"
@@ -363,27 +366,50 @@ def save_ply(points_merged, colors_merged, labels_merged, output_path, points_po
     if points_3dgs is not None and colors_3dgs is not None:
         assert points_3dgs.shape[0] == colors_3dgs.shape[0], "3DGS points and colors must have the same length"
         assert points_3dgs.shape[1] == 3 and colors_3dgs.shape[1] == 3, "3DGS points and colors must have 3 dimensions"
+        # features_3dgs가 제공될 경우 차원 확인
+        if features_3dgs is not None:
+            print(f'dim: {features_3dgs.shape[1]}')
+            assert points_3dgs.shape[0] == features_3dgs.shape[0], "3DGS points and features must have the same length"
+            assert features_3dgs.shape[1] == 7, "features_3dgs must have 7 dimensions (scale: 3, opacity: 1, rotation: 3)"
 
     # 라벨 색상 생성 (merged_label.ply용)
     unique_labels = np.unique(labels_merged)
+
+
+    SCANNET_20_COLORS = [
+    [174, 199, 232],  # 0 - wall
+    [152, 223, 138],  # 1 - floor
+    [31, 119, 180],   # 2 - cabinet
+    [255, 187, 120],  # 3 - bed
+    [188, 189, 34],   # 4 - chair
+    [140, 86, 75],    # 5 - sofa
+    [255, 152, 150],  # 6 - table
+    [214, 39, 40],    # 7 - door
+    [197, 176, 213],  # 8 - window
+    [148, 103, 189],  # 9 - bookshelf
+    [196, 156, 148],  # 10 - picture
+    [23, 190, 207],   # 11 - counter
+    [178, 76, 76],    # 12 - desk
+    [247, 182, 210],  # 13 - curtain
+    [66, 188, 102],   # 14 - refrigerator
+    [219, 219, 141],  # 15 - shower curtain
+    [140, 57, 197],   # 16 - toilet
+    [202, 185, 52],   # 17 - sink
+    [51, 176, 203],   # 18 - bathtub
+    [200, 54, 131]    # 19 - other furniture
+]
     label_colors = {}
     
     # -1 라벨은 흰색으로 처리
     if -1 in unique_labels:
-        label_colors[-1] = np.array([255, 255, 255], dtype=np.uint8)  # 흰색
+        label_colors[-1] = np.array([0, 0, 0], dtype=np.uint8)  # 흰색
 
     # 나머지 라벨에 대해 색상 생성 (0 이상)
     for label in unique_labels:
         if label != -1:
             if label < 20:
                 # ScanNet 20 클래스 색상 팔레트 (예시)
-                palette = [
-                    [255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0], [255, 0, 255],
-                    [0, 255, 255], [128, 0, 0], [0, 128, 0], [0, 0, 128], [128, 128, 0],
-                    [128, 0, 128], [0, 128, 128], [255, 128, 0], [255, 0, 128], [128, 255, 0],
-                    [0, 255, 128], [128, 128, 128], [255, 128, 128], [128, 255, 128], [128, 128, 255]
-                ]
-                label_colors[label] = np.array(palette[label % len(palette)], dtype=np.uint8)
+                label_colors[label] = np.array(SCANNET_20_COLORS[label], dtype=np.uint8)
             else:
                 label_colors[label] = np.random.randint(0, 256, size=3, dtype=np.uint8)
 
@@ -427,12 +453,42 @@ def save_ply(points_merged, colors_merged, labels_merged, output_path, points_po
     PlyData([el_merged_label], text=True).write(merged_label_path)
     print(f"Saved merged label PLY file to {merged_label_path}")
 
-    # 3. 3DGS PLY (3DGS 점만, 점 색상 유지, 선택적 생성)
+    # 3. 3DGS PLY (3DGS 점만, 점 색상 유지, 모든 features 추가)
     if points_3dgs is not None and colors_3dgs is not None:
-        vertex_3dgs = np.zeros(points_3dgs.shape[0], dtype=[
-            ('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
-            ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')
-        ])
+        # vertex dtype 정의 (features 포함 여부에 따라 동적 설정)
+        if features_3dgs is not None:
+            # Features 분리
+            scale_3dgs = features_3dgs[:, :3]  # (N, 3)
+            opacity_3dgs = features_3dgs[:, 3:4]  # (N, 1)
+            rotation_3dgs = features_3dgs[:, 4:]  # (N, 3)
+
+            # Opacity 클리핑
+            opacity_3dgs = np.clip(opacity_3dgs, 0, 1)
+
+            # Scale 평균값 계산
+            scale_mean = np.mean(scale_3dgs, axis=1)  # (N,)
+
+            # Rotation을 z축과의 각도로 변환 (theta)
+            # rotation_3dgs는 단위 벡터로 가정 (norm ≈ 1)
+            # theta = arccos(z), z축과의 각도 (라디안, [0, π])
+            rotation_theta = np.arccos(np.clip(rotation_3dgs[:, 2], -1, 1))  # (N,), clip으로 안정성 확보
+
+            vertex_3dgs = np.zeros(points_3dgs.shape[0], dtype=[
+                ('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
+                ('red', 'u1'), ('green', 'u1'), ('blue', 'u1'),
+                ('scalar_scale_mean', 'f4'),  # Scale 평균
+                ('scalar_opacity', 'f4'),    # Opacity
+                ('scalar_rotation_theta', 'f4')  # Rotation theta (z축과의 각도)
+            ])
+            vertex_3dgs['scalar_scale_mean'] = scale_mean.astype('f4')
+            vertex_3dgs['scalar_opacity'] = opacity_3dgs[:, 0].astype('f4')
+            vertex_3dgs['scalar_rotation_theta'] = rotation_theta.astype('f4')
+        else:
+            vertex_3dgs = np.zeros(points_3dgs.shape[0], dtype=[
+                ('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
+                ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')
+            ])
+        
         vertex_3dgs['x'] = points_3dgs[:, 0].astype('f4')
         vertex_3dgs['y'] = points_3dgs[:, 1].astype('f4')
         vertex_3dgs['z'] = points_3dgs[:, 2].astype('f4')

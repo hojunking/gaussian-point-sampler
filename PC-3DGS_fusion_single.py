@@ -4,8 +4,8 @@ import numpy as np
 from plyfile import PlyData, PlyElement
 
 # 기존 모듈 임포트
-from utils import load_pointcept_data, load_3dgs_data, voxelize_3dgs, update_3dgs_attributes, fps_knn_sampling, save_ply
-from fusion_utils import augment_pointcept_with_3dgs_attributes, preprocess_3dgs_attributes, remove_duplicates, pdistance_pruning, pruning_3dgs_attr, select_3dgs_features
+from utils import load_pointcept_data, load_3dgs_data, voxelize_3dgs, update_3dgs_attributes, save_ply
+from fusion_utils import augment_pointcept_with_3dgs_attributes, preprocess_3dgs_attributes, remove_duplicates, pdistance_pruning, pruning_3dgs_attr, select_3dgs_features, pruning_all_3dgs_attr
 
 def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_methods=None, prune_params=None, k_neighbors=5, ignore_threshold=0.6, voxel_size=0.02, use_features=('scale', 'opacity', 'rotation')):
      # 1. Pointcept 데이터 로드 (.npy 파일에서)
@@ -25,9 +25,11 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_m
     features_3dgs = preprocess_3dgs_attributes(raw_features_3dgs)
 
     # 4. 3DGS pdistance Pruning
-    points_3dgs, features_3dgs = pdistance_pruning(
-        points_3dgs, features_3dgs, points_pointcept, prune_params
-    )
+    pdistance = prune_params['pointcept_max_distance']  !=  0 # voxel_size가 0이 아니면 pdistance 활성화
+    if pdistance:
+        points_3dgs, features_3dgs = pdistance_pruning(
+            points_3dgs, features_3dgs, points_pointcept, prune_params
+        )   
 
     # 6. 3DGS-attr transfer
     print("Augmenting Pointcept points with 3DGS attributes...")
@@ -41,12 +43,12 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_m
         print("Applying Voxelization to 3DGS points...")
         points_3dgs, features_3dgs = voxelize_3dgs(
             points_3dgs, features_3dgs, voxel_size=voxel_size, k_neighbors_max=20)
-    else:
-        print("Applying FPS-kNN to 3DGS points...")
-        points_3dgs, features_3dgs = fps_knn_sampling(
-            points_3dgs, features_3dgs, sample_ratio=0.05, aggregation_method='mean')
-    
-    # 7. 3DGS-attr Pruning
+    # else:
+    #     print("Applying FPS-kNN to 3DGS points...")
+    #     points_3dgs, features_3dgs = fps_knn_sampling(
+    #         points_3dgs, features_3dgs, sample_ratio=0.05, aggregation_method='mean')
+
+         # 7. 3DGS-attr Pruning
     points_3dgs, features_3dgs = pruning_3dgs_attr(
         points_3dgs, features_3dgs, prune_methods, prune_params
     )
@@ -54,6 +56,10 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_m
     features_pointcept, features_3dgs = select_3dgs_features(
         features_pointcept, features_3dgs, use_features=use_features
     )
+    
+    # 7. 중복 점 제거 (3DGS 점 제거)
+    print("Removing duplicate points...")
+    points_3dgs, features_3dgs = remove_duplicates(points_3dgs, features_3dgs, points_pointcept)
 
     # 8. Point cloud color, normals, labels transfer 
     print("Updating 3DGS attributes from Pointcept...")
@@ -61,7 +67,7 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_m
         points_3dgs, points_pointcept, colors_pointcept, normals_pointcept, labels_pointcept, labels200_pointcept, instances_pointcept,
         k_neighbors=k_neighbors, use_label_consistency=True, ignore_threshold=ignore_threshold
     )
-
+    
     # 라벨 일관성 필터링 적용
     points_3dgs = points_3dgs[mask]
     colors_3dgs = colors_3dgs[mask]
@@ -77,18 +83,35 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_m
     ignore_ratio = ignore_count / total_count if total_count > 0 else 0
     print(f"3DGS points with label -1: {ignore_count}/{total_count} (Ratio: {ignore_ratio:.4f})")
 
-    # 7. 중복 점 제거 (3DGS 점 제거)
-    print("Removing duplicate points...")
-    points_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs, features_3dgs = remove_duplicates(
-        points_3dgs, points_pointcept, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs, features_3dgs
-    )
-
     # 8. 병합
     print("Merging Pointcept and 3DGS points...")
     points_merged = np.vstack((points_pointcept, points_3dgs))
     colors_merged = np.vstack((colors_pointcept, colors_3dgs))
+    normals_merged = np.vstack((normals_pointcept, normals_3dgs))
     labels_merged = np.concatenate((labels_pointcept, labels_3dgs))
-    print(f"Final merged points: {len(points_merged)} (Pointcept: {len(points_pointcept)}, 3DGS: {len(points_3dgs)})")
+    labels200_merged = np.concatenate((labels200_pointcept, labels200_3dgs))
+    instances_merged = np.concatenate((instances_pointcept, instances_3dgs))
+    features_merged = np.vstack((features_pointcept, features_3dgs))  # 3DGS 점의 원래 속성 유지
+
+    # # pointcept만 merged 변수에 넣기
+    # points_merged = points_pointcept
+    # colors_merged = colors_pointcept
+    # normals_merged = normals_pointcept
+    # labels_merged = labels_pointcept
+    # labels200_merged = labels200_pointcept
+    # instances_merged = instances_pointcept
+    # features_merged = features_pointcept
+    print(f"Merged points: {len(points_merged)} (Pointcept: {len(points_pointcept)}, 3DGS: {len(points_3dgs)})")
+
+    # # 8. 3DGS-attr Pruning
+    # if any(ratio != 0 for ratio in (prune_methods.get('scale_ratio', 0), 
+    #                                 prune_methods.get('rotation_ratio', 0), 
+    #                                 prune_methods.get('opacity_ratio', 0))):
+    #     print(f"Before pruning points: {len(points_merged)}")
+    #     points_merged, features_merged, colors_merged, normals_merged, labels_merged, labels200_merged, instances_merged = pruning_all_3dgs_attr(
+    #         points_merged, features_merged, prune_methods, prune_params, colors_merged, normals_merged, labels_merged, labels200_merged, instances_merged,
+    #     )
+    #     print(f"After pruning points: {len(points_merged)}")
 
     # 11. PLY 파일로 저장
     output_dir_path = os.path.join(output_dir, exp)
@@ -97,7 +120,7 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_m
     save_ply(
         points_merged, colors_merged, labels_merged, output_ply_path,
         points_pointcept=points_pointcept, colors_pointcept=colors_pointcept,
-        points_3dgs=points_3dgs, colors_3dgs=colors_3dgs
+        points_3dgs=points_3dgs, colors_3dgs=colors_3dgs, features_3dgs=features_3dgs
     )
 
 

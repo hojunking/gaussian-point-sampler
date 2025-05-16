@@ -128,24 +128,7 @@ def select_3dgs_features(features_pointcept, features_3dgs, use_features=('scale
     return filtered_pointcept_features, filtered_features_3dgs
 
 
-def remove_duplicates(points_3dgs, points_pointcept, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs, features_3dgs):
-    """
-    3DGS 점과 Pointcept 점 간의 중복 점 제거.
-    
-    Args:
-        points_3dgs (np.ndarray): 3DGS 점 좌표.
-        points_pointcept (np.ndarray): Pointcept 점 좌표.
-        normals_3dgs (np.ndarray): 3DGS 점 법선.
-        labels_3dgs (np.ndarray): 3DGS 점 segment20 라벨.
-        labels200_3dgs (np.ndarray): 3DGS 점 segment200 라벨.
-        instances_3dgs (np.ndarray): 3DGS 점 instance ID.
-        colors_3dgs (np.ndarray): 3DGS 점 색상.
-        return_indices (bool): 필터링된 인덱스를 반환할지 여부 (기본값: False).
-    
-    Returns:
-        tuple: (points_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs, [indices])
-               indices는 return_indices=True일 때만 반환됨.
-    """
+def remove_duplicates(points_3dgs, features_3dgs, points_pointcept):
     # KNN을 사용하여 Pointcept 점과 3DGS 점 간의 거리 계산
     nbrs = NearestNeighbors(n_neighbors=1, algorithm='auto').fit(points_pointcept)
     distances, _ = nbrs.kneighbors(points_3dgs)
@@ -153,13 +136,9 @@ def remove_duplicates(points_3dgs, points_pointcept, normals_3dgs, labels_3dgs, 
     # 거리가 0.001보다 작은 경우 중복으로 간주
     mask = distances.flatten() > 0.001
     points_3dgs = points_3dgs[mask]
-    normals_3dgs = normals_3dgs[mask]
-    labels_3dgs = labels_3dgs[mask]
-    labels200_3dgs = labels200_3dgs[mask]
-    instances_3dgs = instances_3dgs[mask]
-    colors_3dgs = colors_3dgs[mask]
     features_3dgs = features_3dgs[mask]
-    return points_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs, colors_3dgs, features_3dgs
+
+    return points_3dgs, features_3dgs
 
 def pdistance_pruning(points_3dgs, features_3dgs, points_pointcept, prune_params):
     
@@ -183,6 +162,77 @@ def pdistance_pruning(points_3dgs, features_3dgs, points_pointcept, prune_params
     return points_3dgs, features_3dgs
 
 
+def pruning_all_3dgs_attr(points_3dgs, features_3dgs, prune_methods, prune_params, colors_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs):
+    print(f"Before 3DGS-attr pruning, 3DGS points: {len(points_3dgs)}")
+    mask = np.ones(len(points_3dgs), dtype=bool)  # 최종 마스크 초기화
+    prev_pruned = 0  # 이전 단계까지 Pruned된 점 수 초기화
+
+    # 1. Scale-based Pruning
+    if prune_methods.get('scale', False):
+        scales = features_3dgs[:, 0:3]  # 전처리된 scale 값 사용
+        if prune_methods.get('scale_ratio', 0.0) > 0:
+            scale_magnitudes = np.linalg.norm(scales, axis=-1)  # 전체 점에 대해 계산
+            threshold = np.percentile(scale_magnitudes, 100 * (1 - prune_methods['scale_ratio']))
+            scale_ratio_mask = scale_magnitudes <= threshold  # 하위 비율 제거
+            mask = mask & scale_ratio_mask
+            curr_pruned = np.sum(~mask)  # 현재까지 Pruned된 점 수
+            print(f"Scale Ratio Pruning: Pruned {curr_pruned} points with scale > {threshold:.4f}, Remaining {np.sum(mask)} points")
+            prev_pruned = curr_pruned  # 이전 Pruned 점 수 업데이트
+
+    # 2. Opacity-based Pruning
+    if prune_methods.get('opacity', False):
+        opacities = features_3dgs[:, 3]  # 전처리된 opacity 값 사용
+        if prune_methods.get('opacity_ratio', 0.0) > 0:
+            threshold = np.percentile(opacities, 100 * prune_methods['opacity_ratio'])
+            opacity_ratio_mask = opacities >= threshold  # 하위 비율 제거
+            mask = mask & opacity_ratio_mask
+            curr_pruned = np.sum(~mask)  # 현재까지 Pruned된 점 수
+            additional_pruned = curr_pruned - prev_pruned  # 추가로 Pruned된 점 수
+            print(f"Opacity Ratio Pruning: Pruned {additional_pruned} points with opacity < {threshold:.4f}, Remaining {np.sum(mask)} points")
+            prev_pruned = curr_pruned  # 이전 Pruned 점 수 업데이트
+
+    # 3. Rotation Consistency-based Pruning
+    if prune_methods.get('rotation', False):
+        # Rotation 추출
+        rotation_3dgs = features_3dgs[:, -3:]  # [N, 3], [0, 1] 범위
+
+        # KNN으로 Consistency Score 계산
+        k_neighbors = prune_params.get('k_neighbors', 5)  # 기본값 5
+        knn = NearestNeighbors(n_neighbors=k_neighbors + 1).fit(points_3dgs)
+        distances, indices = knn.kneighbors(points_3dgs)
+
+        consistency_scores = np.zeros(points_3dgs.shape[0])
+        for i in range(points_3dgs.shape[0]):
+            neighbor_idx = indices[i, 1:]  # 자기 자신 제외
+            rot_i = rotation_3dgs[i]
+            rot_neighbors = rotation_3dgs[neighbor_idx]
+            cos_sim = np.sum(rot_i * rot_neighbors, axis=1) / (
+                np.linalg.norm(rot_i) * np.linalg.norm(rot_neighbors, axis=1) + 1e-8
+            )
+            consistency_scores[i] = np.mean(cos_sim)
+
+        # Rotation Consistency 기반 Pruning
+        if prune_methods.get('rotation_ratio', 0.0) > 0:
+            threshold = np.percentile(consistency_scores, 100 * prune_methods['rotation_ratio'])
+            rotation_ratio_mask = consistency_scores >= threshold  # 하위 비율 제거
+            mask = mask & rotation_ratio_mask
+            curr_pruned = np.sum(~mask)  # 현재까지 Pruned된 점 수
+            additional_pruned = curr_pruned - prev_pruned  # 추가로 Pruned된 점 수
+            print(f"Rotation Consistency Pruning: Pruned {additional_pruned} points with consistency < {threshold:.4f}, Remaining {np.sum(mask)} points")
+            prev_pruned = curr_pruned  # 이전 Pruned 점 수 업데이트
+
+    # 최종 점 업데이트
+    points_3dgs = points_3dgs[mask]
+    colors_3dgs = colors_3dgs[mask]
+    normals_3dgs = normals_3dgs[mask]
+    labels_3dgs = labels_3dgs[mask]
+    labels200_3dgs = labels200_3dgs[mask]
+    instances_3dgs = instances_3dgs[mask]
+    features_3dgs = features_3dgs[mask]  # features_3dgs도 업데이트
+
+    print(f"Final 3DGS points after pruning: {len(points_3dgs)} (Pruned {len(mask) - np.sum(mask)} points in total)")
+    return points_3dgs, features_3dgs, colors_3dgs, normals_3dgs, labels_3dgs, labels200_3dgs, instances_3dgs
+
 def pruning_3dgs_attr(points_3dgs, features_3dgs, prune_methods, prune_params):
     print(f"Before 3DGS-attr pruning, 3DGS points: {len(points_3dgs)}")
     mask = np.ones(len(points_3dgs), dtype=bool)  # 최종 마스크 초기화
@@ -194,7 +244,7 @@ def pruning_3dgs_attr(points_3dgs, features_3dgs, prune_methods, prune_params):
         if prune_methods.get('scale_ratio', 0.0) > 0:
             scale_magnitudes = np.linalg.norm(scales, axis=-1)  # 전체 점에 대해 계산
             threshold = np.percentile(scale_magnitudes, 100 * (1 - prune_methods['scale_ratio']))
-            scale_ratio_mask = scale_magnitudes >= threshold  # 하위 비율 제거
+            scale_ratio_mask = scale_magnitudes <= threshold  # 하위 비율 제거
             mask = mask & scale_ratio_mask
             curr_pruned = np.sum(~mask)  # 현재까지 Pruned된 점 수
             print(f"Scale Ratio Pruning: Pruned {curr_pruned} points with scale > {threshold:.4f}, Remaining {np.sum(mask)} points")
