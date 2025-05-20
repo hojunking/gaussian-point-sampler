@@ -239,7 +239,7 @@ if __name__ == "__main__":
 
 
     # Prune methods 설정
-    scale_ratio, opacity_ratio, rotation_ratio = args.attr_pruning_ratio
+    scale_ratio, rotation_ratio, opacity_ratio = args.attr_pruning_ratio
     prune_methods = {
         'pointcept_distance': args.pdistance > 0,
         'scale': scale_ratio > 0,
