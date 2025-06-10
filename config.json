@@ -1,6 +1,6 @@
 {
-  "input_root": "/home/knuvi/Desktop/song/Pointcept/data/scannet",
-  "output_root": "/home/knuvi/Desktop/song/Pointcept/data/scannet_merged",
+  "input_root": "/home/knuvi/Desktop/song/point/data/scannet",
+  "output_root": "/home/knuvi/Desktop/song/point/data/scannet_merged",
   "path_3dgs_root": "/home/knuvi/Desktop/song/data/3dgs_scans/3dgs_output",
   "meta_root": "/home/knuvi/Desktop/song/gaussian-point-sampler/meta",
   "prune_params": {
@@ -9,9 +9,6 @@
     "scale_upper_threshold": 0.95,
     "opacity_lower_threshold": 0.05,
     "opacity_upper_threshold": 0.9,
-    "k_neighbors": 10,
-    "w_scale": 0.5,
-    "w_opacity": 0.3,
-    "w_rotation": 0.2
+    "k_neighbors": 10
   }
 }

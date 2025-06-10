@@ -84,23 +84,23 @@ def merge_pointcept_with_3dgs(pointcept_dir, path_3dgs, output_dir, exp, prune_m
     print(f"3DGS points with label -1: {ignore_count}/{total_count} (Ratio: {ignore_ratio:.4f})")
 
     # 8. 병합
-    print("Merging Pointcept and 3DGS points...")
-    points_merged = np.vstack((points_pointcept, points_3dgs))
-    colors_merged = np.vstack((colors_pointcept, colors_3dgs))
-    normals_merged = np.vstack((normals_pointcept, normals_3dgs))
-    labels_merged = np.concatenate((labels_pointcept, labels_3dgs))
-    labels200_merged = np.concatenate((labels200_pointcept, labels200_3dgs))
-    instances_merged = np.concatenate((instances_pointcept, instances_3dgs))
-    features_merged = np.vstack((features_pointcept, features_3dgs))  # 3DGS 점의 원래 속성 유지
+    # print("Merging Pointcept and 3DGS points...")
+    # points_merged = np.vstack((points_pointcept, points_3dgs))
+    # colors_merged = np.vstack((colors_pointcept, colors_3dgs))
+    # normals_merged = np.vstack((normals_pointcept, normals_3dgs))
+    # labels_merged = np.concatenate((labels_pointcept, labels_3dgs))
+    # labels200_merged = np.concatenate((labels200_pointcept, labels200_3dgs))
+    # instances_merged = np.concatenate((instances_pointcept, instances_3dgs))
+    # features_merged = np.vstack((features_pointcept, features_3dgs))  # 3DGS 점의 원래 속성 유지
 
-    # # pointcept만 merged 변수에 넣기
-    # points_merged = points_pointcept
-    # colors_merged = colors_pointcept
-    # normals_merged = normals_pointcept
-    # labels_merged = labels_pointcept
-    # labels200_merged = labels200_pointcept
-    # instances_merged = instances_pointcept
-    # features_merged = features_pointcept
+    # pointcept만 merged 변수에 넣기
+    points_merged = points_pointcept
+    colors_merged = colors_pointcept
+    normals_merged = normals_pointcept
+    labels_merged = labels_pointcept
+    labels200_merged = labels200_pointcept
+    instances_merged = instances_pointcept
+    features_merged = features_pointcept
     print(f"Merged points: {len(points_merged)} (Pointcept: {len(points_pointcept)}, 3DGS: {len(points_3dgs)})")
 
     # # 8. 3DGS-attr Pruning
@@ -210,7 +210,7 @@ if __name__ == "__main__":
     k_neighbors = prune_params['k_neighbors']
     prune_params['pointcept_max_distance'] = args.pdistance
     # Prune methods 설정
-    scale_ratio, opacity_ratio, rotation_ratio = args.attr_pruning_ratio
+    scale_ratio, rotation_ratio, opacity_ratio  = args.attr_pruning_ratio
 
     prune_methods = {
         'pointcept_distance': args.pdistance > 0,

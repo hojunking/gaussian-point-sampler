@@ -3,89 +3,195 @@
 # 실행 환경 설정
 export PYTHONPATH=$PYTHONPATH:/home/knuvi/Desktop/song/Pointcept
 
-# attr_weight scale rotation opacity
+# --data_type : samples100 or full
+# --pdistance : point distance filtering, 0.0005 고정
+# --voxel_size : 0.04 고정
+# --pruning ratio : 0 0 0 (scale opacity rotation 순서)
+# --use_features scale opacity rotation 순서
+
+python PC-3DGS_fusion.py \
+  --output_root /home/knuvi/Desktop/song/point/data/vox004_rotation04_opacity \
+  --data_type samples100 \
+  --voxel_size 0.04 \
+  --pdistance 0.0005 \
+  --attr_pruning_ratio 0 0.4 0 \
+  --use_features opacity
+
+python PC-3DGS_fusion.py \
+  --output_root /home/knuvi/Desktop/song/point/data/vox004_opacity06_rotation \
+  --data_type samples100 \
+  --voxel_size 0.04 \
+  --pdistance 0.0005 \
+  --attr_pruning_ratio 0 0 0.6 \
+  --use_features rotation
+
+python PC-3DGS_fusion.py \
+  --output_root /home/knuvi/Desktop/song/point/data/vox004_opacity04_rotation-opacity \
+  --data_type samples100 \
+  --voxel_size 0.04 \
+  --pdistance 0.0005 \
+  --attr_pruning_ratio 0 0 0.4 \
+  --use_features rotation opacity
 
 # python PC-3DGS_fusion.py \
-#   --output_root /home/knuvi/Desktop/song/Pointcept/data/scale05-rotation05_ratio02 \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_rotation \
 #   --data_type samples100 \
-#   --pruning_ratio 0.2 \
 #   --voxel_size 0.04 \
 #   --pdistance 0.0005 \
-#   --attr_weight 0.5 0.5 0 \
+#   --attr_pruning_ratio 0 0 0 \
+#   --use_features rotation
+
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_scale-rotation \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0 0 0 \
 #   --use_features scale rotation
 
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_scale06_scale-rotation \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0.6 0 0 \
+#   --use_features scale rotation
 
-python PC-3DGS_fusion.py \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/vox004_opacity \
-  --data_type samples100 \
-  --voxel_size 0.04 \
-  --pdistance 0.0005 \
-  --attr_pruning_ratio 0 0 0 \
-  --use_features opacity
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_rotation04_scale-rotation \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0 0.4 0 \
+#   --use_features scale rotation
 
-python PC-3DGS_fusion.py \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/vox002_opacity \
-  --data_type samples100 \
-  --voxel_size 0.02 \
-  --pdistance 0.0005 \
-  --attr_pruning_ratio 0 0 0 \
-  --use_features opacity
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_opacity06_scale-opacity \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0 0 0.6 \
+#   --use_features scale opacity
 
-python PC-3DGS_fusion.py \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/vox006_opacity \
-  --data_type samples100 \
-  --voxel_size 0.06 \
-  --pdistance 0.0005 \
-  --attr_pruning_ratio 0 0 0 \
-  --use_features opacity
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_rotation04_scale-opacity \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0 0.4 0 \
+#   --use_features scale opacity
 
-python PC-3DGS_fusion.py \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/vox004_scale02_opacity \
-  --data_type samples100 \
-  --voxel_size 0.04 \
-  --pdistance 0.0005 \
-  --attr_pruning_ratio 0.2 0 0 \
-  --use_features opacity
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_scale06_scale-opacity \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0.6 0 0 \
+#   --use_features scale opacity
 
-python PC-3DGS_fusion.py \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/FPS005_opacity \
-  --data_type samples100 \
-  --voxel_size 0 \
-  --pdistance 0.0005 \
-  --attr_pruning_ratio 0 0 0 \
-  --use_features opacity
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_opacity06_scale-rotation-opacity \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0 0 0.6 \
+#   --use_features scale rotation opacity
 
-python PC-3DGS_fusion.py \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/vox004_scale04_opacity \
-  --data_type samples100 \
-  --voxel_size 0.04 \
-  --pdistance 0.0005 \
-  --attr_pruning_ratio 0.4 0 0 \
-  --use_features opacity
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_rotation04_scale-rotation-opacity \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0 0.4 0 \
+#   --use_features scale rotation opacity
 
-python PC-3DGS_fusion.py \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/vox004_scale06_opacity \
-  --data_type samples100 \
-  --voxel_size 0.04 \
-  --pdistance 0.0005 \
-  --attr_pruning_ratio 0.6 0 0 \
-  --use_features opacity
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_scale06_scale-rotation-opacity \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0.6 0 0 \
+#   --use_features scale rotation opacity
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_rotation-opacity \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0 0 0 \
+#   --use_features rotation opacity
 
-python PC-3DGS_fusion.py \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/vox004_scale08_opacity \
-  --data_type samples100 \
-  --voxel_size 0.04 \
-  --pdistance 0.0005 \
-  --attr_pruning_ratio 0.8 0 0 \
-  --use_features opacity
 
-python PC-3DGS_fusion.py \
-  --output_root /home/knuvi/Desktop/song/Pointcept/data/vox004_scale099_opacity \
-  --data_type samples100 \
-  --voxel_size 0.04 \
-  --pdistance 0.0005 \
-  --attr_pruning_ratio 0.99 0 0 \
-  --use_features opacity  
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_scale-rotation-opacity \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0 0 0 \
+#   --use_features scale rotation opacity
+
+
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_scale06_rotation \
+#   --data_type full \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0.6 0 0 \
+#   --use_features rotation
+
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_scale06_scale-rotation-opacity \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0.6 0 0 \
+#   --use_features scale rotation opacity
+
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_opacity06_scale-rotation-opacity \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0 0 0.6 \
+#   --use_features scale rotation opacity
+
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_opactiy06_scale \
+#   --data_type full \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0 0 0.6 \
+#   --use_features scale
+
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/point/data/vox004_opactiy06_rotation \
+#   --data_type full \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0 0 0.6 \
+#   --use_features rotation
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/vox004_scale06_opacity \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0.6 0 0 \
+#   --use_features opacity
+
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/vox004_scale08_opacity \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0.8 0 0 \
+#   --use_features opacity
+
+# python PC-3DGS_fusion.py \
+#   --output_root /home/knuvi/Desktop/song/Pointcept/data/vox004_scale099_opacity \
+#   --data_type samples100 \
+#   --voxel_size 0.04 \
+#   --pdistance 0.0005 \
+#   --attr_pruning_ratio 0.99 0 0 \
+#   --use_features opacity  
 # python PC-3DGS_fusion.py \
 #   --output_root /home/knuvi/Desktop/song/Pointcept/data/FPS01_opacity \
 #   --data_type samples100 \
