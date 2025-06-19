@@ -72,7 +72,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process ScanNet scenes with 3DGS merging and save in Pointcept format with 3DGS attributes.")
     parser.add_argument(
         "--output_root",
-        default="/home/knuvi/Desktop/song/Pointcept/data/scannet_merged",
+        default="/home/knuvi/Desktop/song/point/data/scannet",
         help="Output path for processed data",
     )
     parser.add_argument(
