@@ -3,8 +3,10 @@
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from plyfile import PlyData, PlyElement
+from sklearn.neighbors import KDTree
+from tqdm import tqdm
 
-def boundary_labeling(points: np.ndarray,
+def boundary_labeling_with_3dgs(points: np.ndarray,
                       features: np.ndarray,
                       prune_methods: dict,
                       prune_params: dict) -> np.ndarray:
@@ -65,6 +67,48 @@ def boundary_labeling(points: np.ndarray,
 
     return labels
 
+def boundary_labeling_with_semantic_label(points, labels, prune_params):
+    boundary_radius = prune_params.get('boundary_radius', 0.06) # 기본값 6cm
+    
+    if points is None or labels is None:
+        raise ValueError("Points and labels cannot be None.")
+    if len(points) != len(labels):
+        raise ValueError("Points and labels must have the same length.")
+
+    print("\nStarting boundary labeling based on semantic labels (BFANet method)...")
+    
+    # KD-Tree를 사용하여 효율적인 최근접 이웃 검색
+    print("Building KD-Tree for efficient neighbor search...")
+    tree = KDTree(points)
+    
+    # 각 점에 대해 반경 내 이웃을 쿼리
+    print(f"Querying neighbors within radius {boundary_radius}m...")
+    # query_radius는 각 포인트에 대한 이웃 인덱스 리스트의 리스트를 반환합니다.
+    indices_list = tree.query_radius(points, r=boundary_radius)
+    
+    boundary = np.zeros(len(points), dtype=np.int8)
+    
+    print("Labeling boundary points...")
+    for i in tqdm(range(len(points)), desc="Processing points"):
+        # 현재 포인트의 레이블
+        current_label = labels[i]
+        
+        # 이웃 포인트들의 인덱스
+        neighbor_indices = indices_list[i]
+        
+        # 이웃이 자기 자신 뿐이라면 경계가 아님
+        if len(neighbor_indices) <= 1:
+            continue
+            
+        # 이웃 포인트들의 레이블
+        neighbor_labels = labels[neighbor_indices]
+        
+        # 이웃 레이블 중에 현재 레이블과 다른 것이 하나라도 있으면 경계로 지정
+        if np.any(neighbor_labels != current_label):
+            boundary[i] = 1
+            
+    print(f"Boundary labeling complete. Found {np.sum(boundary)} boundary points.")
+    return boundary
 
     
 def save_boundary_ply(points_pointcept: np.ndarray,
