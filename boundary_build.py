@@ -15,7 +15,7 @@ def boundary_labeling(pointcept_dir, path_3dgs, output_dir, labeling_method, pru
     pointcept_data = load_pointcept_data(pointcept_dir)
     points_pointcept = pointcept_data['coord']
     labels_pointcept = pointcept_data['segment20']
-
+    
     if labeling_method in ['3dgs', 'both']:
         # 2. 3DGS 데이터 로드
         points_3dgs, _, raw_features_3dgs = load_3dgs_data(path_3dgs)
@@ -31,7 +31,7 @@ def boundary_labeling(pointcept_dir, path_3dgs, output_dir, labeling_method, pru
         )
         
         boundary_3dgs = boundary_labeling_with_3dgs(
-            points_pointcept, features_pointcept, prune_methods, prune_params
+            points_pointcept, features_pointcept, labels_pointcept, prune_methods, prune_params
         )
 
     if labeling_method in ['label', 'both']:
@@ -122,6 +122,12 @@ if __name__ == "__main__":
         help="Number of workers for parallel processing (currently not implemented for simplicity)",
     )
     parser.add_argument(
+        "--radius",
+        default=0.06,
+        type=float,
+        help="Boundary radius for neighbor search (default: 0.06m)",
+    )
+    parser.add_argument(
         "--attr_pruning_ratio",
         nargs=3,
         type=float,
@@ -141,7 +147,8 @@ if __name__ == "__main__":
     meta_root = config['meta_root']
     prune_params = config['prune_params']
     k_neighbors = prune_params['k_neighbors']
-
+    prune_params['boundary_radius'] = args.radius  # 사용자 지정 반경 사용
+    
     # prune_params에 boundary_radius가 없는 경우를 대비하여 기본값 설정
     if 'boundary_radius' not in prune_params:
         prune_params['boundary_radius'] = 0.06 # 6cm default

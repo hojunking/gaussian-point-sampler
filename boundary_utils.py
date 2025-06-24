@@ -8,21 +8,56 @@ from tqdm import tqdm
 
 def boundary_labeling_with_3dgs(points: np.ndarray,
                       features: np.ndarray,
+                      labels_pointcept,
                       prune_methods: dict,
-                      prune_params: dict) -> np.ndarray:
+                      prune_params: dict,
+                      ) -> np.ndarray:
     N = points.shape[0]
     mask = np.ones(N, dtype=bool)
 
-    # 1) Scale-based pruning
+    # 1) Scale-based pruning: 단순화된 '클래스별 전역 하위 퍼센타일' 로직으로 대체
     if prune_methods.get('scale', False):
+        print("\nStarting class-global pruning based on scale attribute...")
+        
+        # --- 하이퍼파라미터 ---
         ratio = prune_methods.get('scale_ratio', 0.0)
-        if ratio > 0:
-            scales = features[:, 0:3]  # 각 포인트의 (sx, sy, sz)
-            mags   = np.linalg.norm(scales, axis=1)
-            thr    = np.percentile(mags, 100 * (1.0 - ratio))
-            mask_scale = (mags <= thr)
-            print(f"[Scale] threshold={thr:.4f}, pruned={np.sum(~mask_scale)}")
-            mask &= mask_scale
+        excluded_classes = prune_params.get('excluded_classes', [0, 1, 2, 7, 8, 14, 10]) # floor
+        min_class_points = prune_params.get('min_class_points', 20)   # 최소 20개 이상의 포인트가 있는 클래스만 분석
+        # 전체 포인트의 스케일 크기를 미리 계산
+        scales = np.linalg.norm(features[:, 0:3], axis=1)
+        # 최종 스케일 마스크 초기화
+        mask_scale = np.zeros(N, dtype=bool)
+        
+        # 씬에 존재하는 모든 유니크한 레이블을 찾음
+        unique_labels = np.unique(labels_pointcept)
+
+        # 각 유니크 레이블(클래스 그룹)에 대해 루프 실행
+        for class_id in tqdm(unique_labels, desc="Analyzing each class group"):
+            # 제외할 클래스인지 확인
+            if class_id in excluded_classes:
+                print(f"Skipping class {class_id} as it is in the excluded list.")
+                continue
+            # 현재 클래스에 해당하는 모든 포인트의 '전체 인덱스'를 찾음
+            group_indices = np.where(labels_pointcept == class_id)[0]
+            # 해당 클래스의 포인트가 너무 적으면 통계적 의미가 없으므로 건너뜀
+            if len(group_indices) < min_class_points:
+                continue
+            # 현재 클래스 그룹의 스케일 값들을 가져옴
+            group_scales = scales[group_indices]
+            
+            # 이 클래스 그룹 전체에서 하위 %에 해당하는 스케일 임계값 계산
+            threshold = np.percentile(group_scales, 100 * (1.0 - ratio))
+            
+            is_edge_in_group = group_scales <= threshold
+            # 경계로 판별된 포인트들의 '원래' 전체 인덱스를 가져옴
+            edge_original_indices = group_indices[is_edge_in_group]
+            
+            # 최종 스케일 마스크에 경계 정보를 기록
+            mask_scale[edge_original_indices] = True
+            
+        print(f"Pruning complete. Found {np.sum(mask_scale)} points as edges (bottom {100 * (1.0 - ratio)}% within each object class).")
+        mask &= mask_scale
+
 
     # 2) Opacity-based pruning
     if prune_methods.get('opacity', False):

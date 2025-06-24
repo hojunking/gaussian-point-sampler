@@ -38,15 +38,7 @@ def load_pointcept_data(pointcept_dir):
     return data
 
 def load_3dgs_data(path_3dgs):
-    """
-    3DGS Point Cloud 데이터를 로드.
     
-    Args:
-        path_3dgs (str): 3DGS PLY 파일 경로.
-    
-    Returns:
-        tuple: (points_3dgs, normals_3dgs, vertex_data_3dgs).
-    """
     with open(path_3dgs, 'rb') as f:
         ply_data_3dgs = PlyData.read(f)
     vertex_data_3dgs = ply_data_3dgs['vertex']
@@ -59,7 +51,6 @@ def load_3dgs_data(path_3dgs):
         vertex_data_3dgs['opacity'][:, None],  # [N, 1]
         np.vstack([vertex_data_3dgs[f'rot_{i}'] for i in range(4)]).T  # [N, 4]
     ])
-    
     # 법선 벡터 크기 확인
     norm_3dgs = np.linalg.norm(normals_3dgs, axis=-1)
     #print(f"3DGS normals norm: min={norm_3dgs.min():.4f}, max={norm_3dgs.max():.4f}, zero_count={np.sum(norm_3dgs == 0)}")
