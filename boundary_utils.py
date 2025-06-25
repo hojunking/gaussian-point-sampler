@@ -21,7 +21,7 @@ def boundary_labeling_with_3dgs(points: np.ndarray,
         
         # --- 하이퍼파라미터 ---
         ratio = prune_methods.get('scale_ratio', 0.0)
-        excluded_classes = prune_params.get('excluded_classes', [0, 1, 2, 7, 8, 14, 10]) # floor
+        excluded_classes = prune_params.get('excluded_classes', [1]) # floor
         min_class_points = prune_params.get('min_class_points', 20)   # 최소 20개 이상의 포인트가 있는 클래스만 분석
         # 전체 포인트의 스케일 크기를 미리 계산
         scales = np.linalg.norm(features[:, 0:3], axis=1)
@@ -145,6 +145,94 @@ def boundary_labeling_with_semantic_label(points, labels, prune_params):
     print(f"Boundary labeling complete. Found {np.sum(boundary)} boundary points.")
     return boundary
 
+# 헬퍼 함수: 의미론적 경계점을 찾는 로직
+def find_semantic_boundary_points(points, labels, radius):
+    """주변에 다른 레이블을 가진 포인트가 있는 '의미론적 경계점'을 찾습니다."""
+    tree = KDTree(points)
+    indices_list = tree.query_radius(points, r=radius)
+    boundary_mask = np.zeros(len(points), dtype=bool)
+    # tqdm을 사용하여 진행 상황 표시
+    for i in range(len(points)):
+        # 여러 레이블이 존재하면 경계로 판단
+        if len(np.unique(labels[indices_list[i]])) > 1:
+            boundary_mask[i] = True
+    return np.where(boundary_mask)[0]
+
+# 새로운 함수 시그니처로 변경
+def boundary_labeling_with_semantic_gaussian(
+    points: np.ndarray,
+    labels_pointcept: np.ndarray,
+    points_3dgs: np.ndarray,
+    features_3dgs: np.ndarray,
+    prune_methods: dict,
+    prune_params: dict
+) -> np.ndarray:
+    """
+    의미론적 경계점 주변의 3DGS 가우시안만 필터링하여 모호성을 검사하는 최적화된 방법입니다.
+    """
+    N_points = points.shape[0]
+    
+    # --- 하이퍼파라미터 ---
+    semantic_radius = prune_params.get('boundary_radius', 0.06)
+    gaussian_search_radius = prune_params.get('gaussian_search_radius', 0.02)
+    sigma_multiplier = prune_params.get('sigma_multiplier', 1.0)
+    scale_ratio = prune_methods.get('scale_ratio', 0.0)
+
+
+    print("\nStarting OPTIMIZED ambiguity-based boundary detection with separate 3DGS data...")
+
+    # --- 1단계: 원본 포인트 클라우드에서 의미론적 경계점 찾기 ---
+    semantic_boundary_indices = find_semantic_boundary_points(points, labels_pointcept, semantic_radius)
+    
+    if len(semantic_boundary_indices) == 0:
+        print("No semantic boundary points found. Returning empty edge map.")
+        return np.zeros(N_points, dtype=np.int64)
+    print(f"Found {len(semantic_boundary_indices)} semantic boundary points to start the search.")
+    
+    # --- 2단계: 경계점 주변의 '후보' 가우시안 필터링 ---
+    # 실제 3DGS 가우시안 중심점에 대한 KD-Tree 생성
+    gaussian_tree = KDTree(points_3dgs)
+    
+    # 경계점들 주변의 가우시안 인덱스를 찾음 (중복 포함)
+    candidate_gaussian_indices_nested = gaussian_tree.query_radius(
+        points[semantic_boundary_indices], r=gaussian_search_radius
+    )
+    # 중첩 리스트를 펼치고, 중복을 제거하여 최종 후보 가우시안 인덱스 집합을 만듦
+    candidate_gaussian_indices = np.unique(np.concatenate(candidate_gaussian_indices_nested))
+    print(f"Filtered down to {len(candidate_gaussian_indices)} candidate Gaussians for final check.")
+
+    scales_3dgs_magnitude = np.linalg.norm(features_3dgs[:, 0:3], axis=1)
+    scale_threshold = np.percentile(scales_3dgs_magnitude, 100 * (1.0 - scale_ratio))
+    final_candidate_indices = [idx for idx in candidate_gaussian_indices
+        if scales_3dgs_magnitude[idx] <= scale_threshold
+    ]
+    # --- 3단계: 후보 가우시안의 모호성 검사 및 최종 레이블링 ---
+    point_tree = KDTree(points)
+    radii_3dgs = np.max(np.abs(features_3dgs[:, 0:3]), axis=1) * sigma_multiplier
+    
+    final_edge_mask = np.zeros(N_points, dtype=bool)
+
+    # 필터링된 '후보' 가우시안들에 대해서만 모호성 검사
+    for g_idx in tqdm(final_candidate_indices, desc="Final check on candidate Gaussians"):
+        gaussian_center = points_3dgs[g_idx:g_idx+1]
+        gaussian_radius = radii_3dgs[g_idx]
+        # 가우시안의 영향권 내에 있는 '원본 포인트'들의 인덱스를 찾음
+        point_indices_in_gaussian = point_tree.query_radius(gaussian_center, r=gaussian_radius)[0]
+        
+        if len(point_indices_in_gaussian) < 2:
+            continue
+            
+        associated_labels = labels_pointcept[point_indices_in_gaussian]
+        
+        if len(np.unique(associated_labels)) > 1:
+            # 이 가우시안은 '모호함'이 확정됨. 관련된 모든 원본 포인트를 경계로 지정.
+            final_edge_mask[point_indices_in_gaussian] = True
+            
+    print(f"Analysis complete. Found {np.sum(final_edge_mask)} total boundary points.")
+
+    labels = np.zeros(N_points, dtype=np.int64)
+    labels[final_edge_mask] = 1
+    return labels
     
 def save_boundary_ply(points_pointcept: np.ndarray,
                       labels_pointcept: np.ndarray,

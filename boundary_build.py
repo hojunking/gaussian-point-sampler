@@ -8,7 +8,7 @@ from tqdm import tqdm
 # 기존 모듈 임포트
 from utils import load_pointcept_data, load_3dgs_data
 from fusion_utils import augment_pointcept_with_3dgs_attributes, preprocess_3dgs_attributes
-from boundary_utils import boundary_labeling_with_3dgs, boundary_labeling_with_semantic_label
+from boundary_utils import boundary_labeling_with_3dgs, boundary_labeling_with_semantic_label, boundary_labeling_with_semantic_gaussian
 
 def boundary_labeling(pointcept_dir, path_3dgs, output_dir, labeling_method, prune_methods=None, prune_params=None, k_neighbors=10):
     # 1. Pointcept 데이터 로드 (.npy 파일에서)
@@ -16,14 +16,14 @@ def boundary_labeling(pointcept_dir, path_3dgs, output_dir, labeling_method, pru
     points_pointcept = pointcept_data['coord']
     labels_pointcept = pointcept_data['segment20']
     
-    if labeling_method in ['3dgs', 'both']:
-        # 2. 3DGS 데이터 로드
-        points_3dgs, _, raw_features_3dgs = load_3dgs_data(path_3dgs)
+    # 2. 3DGS 데이터 로드
+    points_3dgs, _, raw_features_3dgs = load_3dgs_data(path_3dgs)
 
-        # 3. 3DGS 속성 전처리
-        print("Preprocessing 3DGS attributes...")
-        features_3dgs = preprocess_3dgs_attributes(raw_features_3dgs)
+    # 3. 3DGS 속성 전처리
+    print("Preprocessing 3DGS attributes...")
+    features_3dgs = preprocess_3dgs_attributes(raw_features_3dgs)
     
+    if labeling_method in ['3dgs', 'both']:
         # 6. 3DGS-attr transfer
         print("Augmenting Pointcept points with 3DGS attributes...")
         features_pointcept  = augment_pointcept_with_3dgs_attributes(
@@ -35,10 +35,13 @@ def boundary_labeling(pointcept_dir, path_3dgs, output_dir, labeling_method, pru
         )
 
     if labeling_method in ['label', 'both']:
-       
-        boundary_label = boundary_labeling_with_semantic_label(
-            points_pointcept, labels_pointcept, prune_params=prune_params
+        
+        boundary_label = boundary_labeling_with_semantic_gaussian(
+            points_pointcept, labels_pointcept, points_3dgs, features_3dgs, prune_methods, prune_params=prune_params
         )
+        # boundary_label = boundary_labeling_with_semantic_label(
+        #     points_pointcept, labels_pointcept, prune_params=prune_params
+        # )
 
      # --- 최종 레이블 결정 및 병합 ---
     final_boundary = None

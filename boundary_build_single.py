@@ -5,21 +5,21 @@ import numpy as np
 # 기존 모듈 임포트
 from utils import load_pointcept_data, load_3dgs_data
 from fusion_utils import augment_pointcept_with_3dgs_attributes, preprocess_3dgs_attributes
-from boundary_utils import boundary_labeling_with_3dgs, boundary_labeling_with_semantic_label, save_boundary_ply
+from boundary_utils import boundary_labeling_with_3dgs, boundary_labeling_with_semantic_label, save_boundary_ply, boundary_labeling_with_semantic_gaussian
 
 def boundary_labeling(pointcept_dir, path_3dgs, output_dir, labeling_method, exp, prune_methods=None, prune_params=None, k_neighbors=5):
     # 1. Pointcept 데이터 로드 (.npy 파일에서)
     pointcept_data = load_pointcept_data(pointcept_dir)
     points_pointcept = pointcept_data['coord']
     labels_pointcept = pointcept_data['segment20']
+    # 2. 3DGS 데이터 로드
+    points_3dgs, _, raw_features_3dgs = load_3dgs_data(path_3dgs)
+
+    # 3. 3DGS 속성 전처리
+    print("Preprocessing 3DGS attributes...")
+    features_3dgs = preprocess_3dgs_attributes(raw_features_3dgs)
 
     if labeling_method in ['3dgs', 'both']:
-        # 2. 3DGS 데이터 로드
-        points_3dgs, _, raw_features_3dgs = load_3dgs_data(path_3dgs)
-
-        # 3. 3DGS 속성 전처리
-        print("Preprocessing 3DGS attributes...")
-        features_3dgs = preprocess_3dgs_attributes(raw_features_3dgs)
     
         # 6. 3DGS-attr transfer
         print("Augmenting Pointcept points with 3DGS attributes...")
@@ -33,8 +33,11 @@ def boundary_labeling(pointcept_dir, path_3dgs, output_dir, labeling_method, exp
 
     if labeling_method in ['label', 'both']:
        
-        boundary_label = boundary_labeling_with_semantic_label(
-            points_pointcept, labels_pointcept, prune_params=prune_params
+        # boundary_label = boundary_labeling_with_semantic_label(
+        #     points_pointcept, labels_pointcept, prune_params=prune_params
+        # )
+        boundary_label = boundary_labeling_with_semantic_gaussian(
+            points_pointcept, labels_pointcept, points_3dgs, features_3dgs, prune_methods, prune_params=prune_params
         )
 
      # --- 최종 레이블 결정 및 병합 ---
@@ -115,7 +118,12 @@ if __name__ == "__main__":
         default=[0.0, 0.0, 0.0],
         help="Pruning ratios for scale, opacity, rotation (default: 0.0 0.0 0.0). Set ratio > 0 to enable pruning for that attribute.",
     )
-
+    parser.add_argument(
+        "--radius",
+        default=0.06,
+        type=float,
+        help="Boundary radius for neighbor search (default: 0.06m)",
+    )
     args = parser.parse_args()
 
     # Config 파일 로드
@@ -128,6 +136,7 @@ if __name__ == "__main__":
     meta_root = config['meta_root']
     prune_params = config['prune_params']
     k_neighbors = prune_params['k_neighbors']
+    prune_params['boundary_radius'] = args.radius  # 사용자 지정 반경 사용
 
     # prune_params에 boundary_radius가 없는 경우를 대비하여 기본값 설정
     if 'boundary_radius' not in prune_params:
