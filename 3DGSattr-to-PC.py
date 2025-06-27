@@ -15,13 +15,13 @@ def GSattr_to_PC(pointcept_dir, path_3dgs, output_dir, k_neighbors=10):
     points_pointcept = pointcept_data['coord']
     
     # 2. 3DGS 데이터 로드
-    points_3dgs, _, raw_features_3dgs = load_3dgs_data(path_3dgs)
+    points_3dgs, raw_features_3dgs = load_3dgs_data(path_3dgs)
 
     # 3. 3DGS 속성 전처리
-    print("Preprocessing 3DGS attributes...")
+    #print("Preprocessing 3DGS attributes...")
     features_3dgs = preprocess_3dgs_attributes(raw_features_3dgs)
     
-    print("Augmenting Pointcept points with 3DGS attributes...")
+    #print("Augmenting Pointcept points with 3DGS attributes...")
     features_pointcept  = augment_pointcept_with_3dgs_attributes(
         points_pointcept, points_3dgs, features_3dgs, k_neighbors=k_neighbors
     )

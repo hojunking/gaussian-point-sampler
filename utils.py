@@ -34,7 +34,7 @@ def load_pointcept_data(pointcept_dir):
             data[key] = np.full_like(data['segment20'], -1, dtype=np.int64)
 
     print(f"Loaded Pointcept data from {pointcept_dir}: {data['coord'].shape[0]} points")
-    print(f"Segment20 label distribution: min={data['segment20'].min()}, max={data['segment20'].max()}")
+    #print(f"Segment20 label distribution: min={data['segment20'].min()}, max={data['segment20'].max()}")
     return data
 
 def load_3dgs_data(path_3dgs):
@@ -44,7 +44,7 @@ def load_3dgs_data(path_3dgs):
     vertex_data_3dgs = ply_data_3dgs['vertex']
     
     points_3dgs = np.stack([vertex_data_3dgs['x'], vertex_data_3dgs['y'], vertex_data_3dgs['z']], axis=-1)
-    normals_3dgs = np.stack([vertex_data_3dgs['nx'], vertex_data_3dgs['ny'], vertex_data_3dgs['nz']], axis=-1)
+    #normals_3dgs = np.stack([vertex_data_3dgs['nx'], vertex_data_3dgs['ny'], vertex_data_3dgs['nz']], axis=-1)
     
     raw_features_3dgs = np.hstack([
         np.vstack([vertex_data_3dgs[f'scale_{i}'] for i in range(3)]).T,  # [N, 3]
@@ -52,21 +52,21 @@ def load_3dgs_data(path_3dgs):
         np.vstack([vertex_data_3dgs[f'rot_{i}'] for i in range(4)]).T  # [N, 4]
     ])
     # 법선 벡터 크기 확인
-    norm_3dgs = np.linalg.norm(normals_3dgs, axis=-1)
+   # norm_3dgs = np.linalg.norm(normals_3dgs, axis=-1)
     #print(f"3DGS normals norm: min={norm_3dgs.min():.4f}, max={norm_3dgs.max():.4f}, zero_count={np.sum(norm_3dgs == 0)}")
     
     # 법선이 모두 0인 경우 추정
-    if np.all(norm_3dgs == 0):
-        print("All 3DGS normals are zero. Estimating normals...")
-        pcd_3dgs = o3d.geometry.PointCloud()
-        pcd_3dgs.points = o3d.utility.Vector3dVector(points_3dgs)
-        pcd_3dgs.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=20))
-        normals_3dgs = np.asarray(pcd_3dgs.normals)
-        norm_3dgs = np.linalg.norm(normals_3dgs, axis=-1)
+    # if np.all(norm_3dgs == 0):
+    #     pcd_3dgs = o3d.geometry.PointCloud()
+    #     pcd_3dgs.points = o3d.utility.Vector3dVector(points_3dgs)
+    #     pcd_3dgs.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamKNN(knn=20))
+    #     normals_3dgs = np.asarray(pcd_3dgs.normals)
+    #     norm_3dgs = np.linalg.norm(normals_3dgs, axis=-1)
         #print(f"After estimation - 3DGS normals norm: min={norm_3dgs.min():.4f}, max={norm_3dgs.max():.4f}, zero_count={np.sum(norm_3dgs == 0)}")
     
     print(f"Loaded 3DGS data from {path_3dgs}: {points_3dgs.shape[0]} points")
-    return points_3dgs, normals_3dgs, raw_features_3dgs
+    # return points_3dgs, normals_3dgs, raw_features_3dgs
+    return points_3dgs, raw_features_3dgs
 
 def update_3dgs_attributes(points_3dgs, points_pointcept, colors_pointcept, normals_pointcept, labels_pointcept, labels200_pointcept, instances_pointcept, k_neighbors=10, use_label_consistency=True, ignore_threshold=0.6):
     
