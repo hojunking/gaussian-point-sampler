@@ -17,7 +17,7 @@ def boundary_labeling(pointcept_dir, path_3dgs, output_dir, labeling_method, pru
     labels_pointcept = pointcept_data['segment20']
     
     # 2. 3DGS 데이터 로드
-    points_3dgs, _, raw_features_3dgs = load_3dgs_data(path_3dgs)
+    points_3dgs, raw_features_3dgs = load_3dgs_data(path_3dgs)
 
     # 3. 3DGS 속성 전처리
     print("Preprocessing 3DGS attributes...")
@@ -36,12 +36,12 @@ def boundary_labeling(pointcept_dir, path_3dgs, output_dir, labeling_method, pru
 
     if labeling_method in ['label', 'both']:
         
-        boundary_label = boundary_labeling_with_semantic_gaussian(
-            points_pointcept, labels_pointcept, points_3dgs, features_3dgs, prune_methods, prune_params=prune_params
-        )
-        # boundary_label = boundary_labeling_with_semantic_label(
-        #     points_pointcept, labels_pointcept, prune_params=prune_params
+        # boundary_label = boundary_labeling_with_semantic_gaussian(
+        #     points_pointcept, labels_pointcept, points_3dgs, features_3dgs, prune_methods, prune_params=prune_params
         # )
+        boundary_label = boundary_labeling_with_semantic_label(
+            points_pointcept, labels_pointcept, prune_params=prune_params
+        )
 
      # --- 최종 레이블 결정 및 병합 ---
     final_boundary = None

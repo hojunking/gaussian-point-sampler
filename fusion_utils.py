@@ -6,17 +6,7 @@ from utils import process_rotation
 
 
 def preprocess_3dgs_attributes(raw_features_3dgs, normalize_scale=True):
-    """
-    3DGS 속성을 전처리하여 사용 가능한 형태로 변환.
     
-    Args:
-        vertex_data_3dgs: 3DGS PLY 파일의 vertex 데이터.
-        normalize_scale (bool): Scale 값을 [0, 1]로 정규화할지 여부.
-    
-    Returns:
-        np.ndarray: 전처리된 3DGS 속성 [N, 7] (scale_x, scale_y, scale_z, opacity, dir_x, dir_y, dir_z).
-    """
-
     # 속성 분리
     scale = raw_features_3dgs[:, 0:3]  # [N, 3] (scale_x, scale_y, scale_z)
     opacity = raw_features_3dgs[:, 3:4]  # [N, 1] (opacity)
@@ -27,38 +17,79 @@ def preprocess_3dgs_attributes(raw_features_3dgs, normalize_scale=True):
     scale_processed = np.nan_to_num(scale_processed, nan=1e-6, posinf=1e-6, neginf=1e-6)
     scale_processed = np.maximum(scale_processed, 1e-6)  # 양수 보장
 
-    # 추가 로그 변환으로 긴 꼬리 완화
-    scale_processed = np.log1p(scale_processed)
-    if normalize_scale:
-        scale_min = scale_processed.min()
-        scale_max = scale_processed.max()
-        if scale_max > scale_min:  # 분모가 0이 되지 않도록
-            scale_processed = (scale_processed - scale_min) / (scale_max - scale_min)
-        else:
-            scale_processed = np.zeros_like(scale_processed)  # 모든 값이 동일하면 0으로 설정
-
+    # # 추가 로그 변환으로 긴 꼬리 완화
+    # scale_processed = np.log1p(scale_processed)
+    # if normalize_scale:
+    #     scale_min = scale_processed.min()
+    #     scale_max = scale_processed.max()
+    #     if scale_max > scale_min:  # 분모가 0이 되지 않도록
+    #         scale_processed = (scale_processed - scale_min) / (scale_max - scale_min)
+    #     else:
+    #         scale_processed = np.zeros_like(scale_processed)  # 모든 값이 동일하면 0으로 설정
     # Opacity: 시그모이드 변환
     opacity_processed = 1 / (1 + np.exp(-opacity))  # [-∞, ∞] -> [0, 1]
     opacity_processed = np.nan_to_num(opacity_processed, nan=0.0, posinf=1.0, neginf=0.0)
     opacity_processed = np.clip(opacity_processed, 0.0, 1.0)  # [0, 1]로 클리핑
 
-    # 추가 로그 변환으로 긴 꼬리 완화
-    opacity_processed = np.log1p(opacity_processed)
-    opacity_min = opacity_processed.min()
-    opacity_max = opacity_processed.max()
-    if opacity_max > opacity_min:
-        opacity_processed = (opacity_processed - opacity_min) / (opacity_max - opacity_min)
-    else:
-        opacity_processed = np.zeros_like(opacity_processed)
-
+    # # 추가 로그 변환으로 긴 꼬리 완화
+    # opacity_processed = np.log1p(opacity_processed)
+    # opacity_min = opacity_processed.min()
+    # opacity_max = opacity_processed.max()
+    # if opacity_max > opacity_min:
+    #     opacity_processed = (opacity_processed - opacity_min) / (opacity_max - opacity_min)
+    # else:
+    #     opacity_processed = np.zeros_like(opacity_processed)
+    
     # 후처리된 속성 결합
     features_3dgs = np.hstack((scale_processed, opacity_processed, rotation))  # [N, 8]
     return features_3dgs
 
+
+def quaternion_to_direction(quaternions):
+    """(N, 4) 쿼터니언 배열을 (N, 3) 방향 벡터 배열로 변환합니다."""
+    # 쿼터니언 정규화 (입력이 이미 정규화되었다고 가정하면 생략 가능)
+    norm = np.linalg.norm(quaternions, axis=1, keepdims=True)
+    # 0으로 나누는 것을 방지
+    safe_norm = np.where(norm == 0, 1, norm)
+    quaternions = quaternions / safe_norm
+
+    w, x, y, z = quaternions[:, 0], quaternions[:, 1], quaternions[:, 2], quaternions[:, 3]
+
+    # 기준 벡터 [0, 0, 1]에 회전 적용
+    directions = np.zeros((len(quaternions), 3))
+    directions[:, 0] = 2 * (x * z + w * y)
+    directions[:, 1] = 2 * (y * z - w * x)
+    directions[:, 2] = 1 - 2 * (x * x + y * y)
+
+    # 최종 방향 벡터 정규화
+    dir_norm = np.linalg.norm(directions, axis=1, keepdims=True)
+    safe_dir_norm = np.where(dir_norm == 0, 1, dir_norm)
+    return directions / safe_dir_norm
+
+def get_weighted_direction(neighbor_quaternions, weights):
+    neighbor_directions = quaternion_to_direction(neighbor_quaternions)  # 결과 shape: [k, 3]
+
+    # 2. 방향 벡터들에 대해 가중 평균을 계산합니다.
+    # weights [k] -> [k, 1]로 만들어 브로드캐스팅 후 가중합 계산
+    weighted_direction = np.sum(neighbor_directions * weights[:, np.newaxis], axis=0)
+
+    # 3. 최종 방향 벡터를 정규화하여 반환합니다.
+    final_norm = np.linalg.norm(weighted_direction)
+    if final_norm > 1e-8:
+        return weighted_direction / final_norm
+    else:
+        # 모든 벡터가 상쇄되어 0이 된 경우, 기본 방향 벡터를 반환합니다.
+        return np.array([0, 0, 1], dtype=np.float32)
+
+
 def augment_pointcept_with_3dgs_attributes(points_pointcept, points_3dgs, features_3dgs, k_neighbors=5):
+    
     # KNN으로 이웃 찾기
     nbrs = NearestNeighbors(n_neighbors=k_neighbors, algorithm='auto').fit(points_3dgs)
     distances, indices = nbrs.kneighbors(points_pointcept)
+
+    weights = 1.0 / (distances + 1e-8) 
+    weights = weights / np.sum(weights, axis=1, keepdims=True) # [M, k]
 
     # 사용할 features 선택 (Pointcept에 전달용)
     selected_features_pointcept = []
@@ -67,14 +98,16 @@ def augment_pointcept_with_3dgs_attributes(points_pointcept, points_3dgs, featur
     # Scale 속성 (Pointcept에 전달)
     scale_3dgs = features_3dgs[:, feature_idx:feature_idx + 3]  # [N, 3]
     scale_neighbors = scale_3dgs[indices]  # [M, k_neighbors, 3]
-    scale_augmented = np.mean(scale_neighbors, axis=1)  # [M, 3]
+
+    scale_augmented = np.sum(scale_neighbors * weights[..., np.newaxis], axis=1)  # [M, 3]
     selected_features_pointcept.append(scale_augmented)
     feature_idx += 3
 
     # Opacity 속성 (Pointcept에 전달)
     opacity_3dgs = features_3dgs[:, feature_idx:feature_idx + 1]  # [N, 1]
     opacity_neighbors = opacity_3dgs[indices]  # [M, k_neighbors, 1]
-    opacity_augmented = np.mean(opacity_neighbors, axis=1)  # [M, 1]
+
+    opacity_augmented = np.sum(opacity_neighbors * weights[..., np.newaxis], axis=1)  # [M, 1]
     selected_features_pointcept.append(opacity_augmented)
     feature_idx += 1
 
@@ -83,8 +116,12 @@ def augment_pointcept_with_3dgs_attributes(points_pointcept, points_3dgs, featur
     rotation_neighbors = rotation_3dgs[indices]  # [M, k_neighbors, 4]
     rotation_augmented = np.zeros((len(points_pointcept), 3), dtype=np.float32)  # [M, 3] 초기화
     for j in range(len(points_pointcept)):
-        rotation_augmented[j] = process_rotation(rotation_neighbors[j])
+        rotation_augmented[j] = get_weighted_direction(
+            neighbor_quaternions=rotation_neighbors[j], 
+            weights=weights[j]
+        )
     selected_features_pointcept.append(rotation_augmented)
+    
     # 선택된 features 연결
     if selected_features_pointcept:
         augmented_features = np.concatenate(selected_features_pointcept, axis=-1)  # [M, D]

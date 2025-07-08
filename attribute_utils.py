@@ -3,8 +3,7 @@ import os
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import MinMaxScaler
-from plyfile import PlyData
-
+from plyfile import PlyData,PlyElement
 
 def load_pointcept_data(pointcept_dir):
     """
@@ -131,20 +130,6 @@ def quaternion_to_direction(quaternion):
     return np.stack([dir_x, dir_y, dir_z], axis=-1)
 
 def augment_pointcept_with_3dgs_attributes(points_pointcept, points_3dgs, features_3dgs, k_neighbors=5, use_features=('scale',), aggregation='mean'):
-    """
-    Pointcept 점에 3DGS 속성을 전달 (KNN 사용).
-    
-    Args:
-        points_pointcept (np.ndarray): Pointcept 점 좌표 [M, 3].
-        points_3dgs (np.ndarray): 3DGS 점 좌표 [N, 3].
-        features_3dgs (np.ndarray): 3DGS 속성 [N, 8] (scale_x, scale_y, scale_z, opacity, rot_w, rot_x, rot_y, rot_z).
-        k_neighbors (int): KNN에서 사용할 이웃 점 개수.
-        use_features (tuple): 사용할 features ('scale', 'opacity', 'rotation').
-        aggregation (str): 속성 집계 방식 ('mean', 'max', 'median').
-    
-    Returns:
-        np.ndarray: Pointcept 점에 전달된 속성 [M, D].
-    """
     # 3DGS 속성 분리
     scale_3dgs = features_3dgs[:, 0:3]  # [N, 3] (scale_x, scale_y, scale_z)
     opacity_3dgs = features_3dgs[:, 3:4]  # [N, 1] (opacity)
@@ -154,41 +139,29 @@ def augment_pointcept_with_3dgs_attributes(points_pointcept, points_3dgs, featur
     nbrs = NearestNeighbors(n_neighbors=k_neighbors, algorithm='auto').fit(points_3dgs)
     distances, indices = nbrs.kneighbors(points_pointcept)
 
+    weights = 1.0 / (distances + 1e-8) 
+    weights = weights / np.sum(weights, axis=1, keepdims=True) # [M, k]
+
     # 사용할 features 선택
     selected_features = []
     if 'scale' in use_features:
-        # Scale 속성
-        scale_neighbors = scale_3dgs[indices]  # [M, k_neighbors, 3]
-        if aggregation == 'mean':
-            scale_augmented = np.mean(scale_neighbors, axis=1)  # [M, 3]
-        elif aggregation == 'max':
-            scale_augmented = np.max(scale_neighbors, axis=1)  # [M, 3]
-        elif aggregation == 'median':
-            scale_augmented = np.median(scale_neighbors, axis=1)  # [M, 3]
+        scale_neighbors = scale_3dgs[indices] # [M, k, 3]
+        # 3. 가중 평균 적용
+        # weights [M, k] -> [M, k, 1]로 브로드캐스팅하여 각 scale feature에 곱함
+        scale_augmented = np.sum(scale_neighbors * weights[..., np.newaxis], axis=1) # [M, 3]
         selected_features.append(scale_augmented)
 
     if 'opacity' in use_features:
-        # Opacity 속성
-        opacity_neighbors = opacity_3dgs[indices]  # [M, k_neighbors, 1]
-        if aggregation == 'mean':
-            opacity_augmented = np.mean(opacity_neighbors, axis=1)  # [M, 1]
-        elif aggregation == 'max':
-            opacity_augmented = np.max(opacity_neighbors, axis=1)  # [M, 1]
-        elif aggregation == 'median':
-            opacity_augmented = np.median(opacity_neighbors, axis=1)  # [M, 1]
+        opacity_neighbors = opacity_3dgs[indices] # [M, k, 1]
+        opacity_augmented = np.sum(opacity_neighbors * weights[..., np.newaxis], axis=1) # [M, 1]
         selected_features.append(opacity_augmented)
 
     if 'rotation' in use_features:
         # Rotation 속성 (쿼터니언 → 방향 벡터)
         rotation_neighbors = rotation_3dgs[indices]  # [M, k_neighbors, 4]
-        # 쿼터니언 평균 계산 (단순 평균은 쿼터니언에 적합하지 않으므로 방향 벡터로 변환 후 평균)
         direction_neighbors = np.array([quaternion_to_direction(rotation_neighbors[i]) for i in range(len(points_pointcept))])  # [M, k_neighbors, 3]
-        if aggregation == 'mean':
-            direction_augmented = np.mean(direction_neighbors, axis=1)  # [M, 3]
-        elif aggregation == 'max':
-            direction_augmented = np.max(direction_neighbors, axis=1)  # [M, 3]
-        elif aggregation == 'median':
-            direction_augmented = np.median(direction_neighbors, axis=1)  # [M, 3]
+        direction_augmented = np.sum(direction_neighbors * weights[..., np.newaxis], axis=1) # [M, 1]
+        
         selected_features.append(direction_augmented)
 
     # 선택된 features 연결
@@ -275,3 +248,86 @@ def update_3dgs_labels(points_3dgs, points_pointcept, labels_pointcept, labels20
 
     return labels_3dgs, labels200_3dgs, instances_3dgs, mask
 
+
+def save_scale_rot_opacity_ply(
+    points: np.ndarray,
+    features: np.ndarray,
+    labels: np.ndarray,
+    output_prefix: str,
+    output_dir_path: str,
+    exclude_labels):
+    # 10단계 컬러맵 정의
+    colors = np.array([
+        [255,   0,   0], [255, 128,   0], [255, 255,   0], [128, 255,   0], [  0, 255,   0],
+        [  0, 255, 255], [  0, 128, 255], [  0,   0, 255], [128,   0, 255], [255,   0, 255],
+    ], dtype=np.uint8)
+    # 제외된 포인트를 위한 회색 정의
+    excluded_color = np.array([128, 128, 128], dtype=np.uint8)
+
+    # --- 속성을 스칼라 값으로 변환 ---
+    scale_vals = np.linalg.norm(features[:, 0:3], axis=1)
+    opacity_vals = features[:, 3]
+    # 회전은 현재 예제에서 제외되었으므로 주석 처리
+    # rot_vec = features[:, 4:7]
+    # rotation_vals = np.linalg.norm(rot_vec, axis=1)
+
+    attr_dict = {
+        'scale': scale_vals,
+        'opacity': opacity_vals
+    }
+    
+    # --- 레이블 기반 필터링 마스크 생성 ---
+    # exclude_labels에 포함된 레이블을 가진 포인트는 True가 됨
+    exclusion_mask = np.isin(labels, exclude_labels)
+    # 분포 계산에 사용할 포인트 (제외되지 않은 포인트)
+    inclusion_mask = ~exclusion_mask
+
+    print(f"전체 포인트: {len(points)}, 제외할 포인트: {np.sum(exclusion_mask)}, 분석할 포인트: {np.sum(inclusion_mask)}")
+
+    if not os.path.exists(output_dir_path):
+        os.makedirs(output_dir_path)
+
+    for name, vals in attr_dict.items():
+        # --- 분포 계산 (제외되지 않은 포인트만 사용) ---
+        vals_for_distribution = vals[inclusion_mask]
+        
+        # 분석할 포인트가 없는 경우 건너뛰기
+        if len(vals_for_distribution) == 0:
+            print(f"'{name}' 속성에 대해 분석할 포인트가 없어 건너뜁니다.")
+            continue
+
+        # 백분위수 경계 계산
+        pct = np.percentile(vals_for_distribution, np.linspace(0, 100, 11))
+        bins = pct[1:-1]
+        
+        # 모든 값이 동일하여 bin이 제대로 생성되지 않는 경우 처리
+        if bins.size == 0 or np.all(bins == bins[0]):
+            print(f"'{name}' 속성의 모든 값이 거의 동일하여 단일 색상으로 처리됩니다.")
+            # 모든 포인트에 대해 인덱스를 0으로 설정
+            digitized_indices = np.zeros(len(vals), dtype=int)
+        else:
+            # 전체 값에 대해 어느 구간에 속하는지 인덱스 계산
+            digitized_indices = np.digitize(vals, bins, right=False)
+
+        # --- 색상 할당 ---
+        # 최종 색상을 담을 배열 초기화
+        final_rgb = np.zeros((len(points), 3), dtype=np.uint8)
+        
+        # 포함된 포인트들: 분포에 따라 컬러맵에서 색상 할당
+        final_rgb[inclusion_mask] = colors[digitized_indices[inclusion_mask]]
+        
+        # 제외된 포인트들: 회색으로 할당
+        final_rgb[exclusion_mask] = excluded_color
+
+        # --- PLY 파일 생성 ---
+        vertex = np.empty(len(points), dtype=[
+            ('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
+            ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')
+        ])
+        vertex['x'], vertex['y'], vertex['z'] = points[:, 0], points[:, 1], points[:, 2]
+        vertex['red'], vertex['green'], vertex['blue'] = final_rgb[:, 0], final_rgb[:, 1], final_rgb[:, 2]
+
+        ply_el = PlyElement.describe(vertex, 'vertex')
+        output_path = os.path.join(output_dir_path, f"{output_prefix}_{name}.ply")
+        PlyData([ply_el], text=True).write(output_path)
+        print(f"'{output_path}'에 저장되었습니다.")

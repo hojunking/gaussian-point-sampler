@@ -15,47 +15,49 @@ def boundary_labeling_with_3dgs(points: np.ndarray,
     N = points.shape[0]
     mask = np.ones(N, dtype=bool)
 
-    # 1) Scale-based pruning: 단순화된 '클래스별 전역 하위 퍼센타일' 로직으로 대체
+    # 1) Scale-based pruning: '제외 클래스 외 전역 하위 퍼센타일' 로직
     if prune_methods.get('scale', False):
-        print("\nStarting class-global pruning based on scale attribute...")
+        print("\nStarting global pruning based on scale attribute (excluding specified classes)...")
         
         # --- 하이퍼파라미터 ---
-        ratio = prune_methods.get('scale_ratio', 0.0)
-        excluded_classes = prune_params.get('excluded_classes', [1]) # floor
-        min_class_points = prune_params.get('min_class_points', 20)   # 최소 20개 이상의 포인트가 있는 클래스만 분석
+        # scale_ratio: 유지할 비율. 예를 들어 0.9는 상위 90%를 유지하고 하위 10%를 경계로 간주.
+        ratio = prune_methods.get('scale_ratio', 0.9) 
+        excluded_classes = prune_params.get('excluded_classes', [-1, 0, 1]) # 무시, 바닥, 벽 등
+        
         # 전체 포인트의 스케일 크기를 미리 계산
         scales = np.linalg.norm(features[:, 0:3], axis=1)
-        # 최종 스케일 마스크 초기화
+        
+        # --- 전역 임계값 계산을 위한 포인트 필터링 ---
+        # 제외할 클래스에 속하지 않는 모든 포인트의 마스크를 생성
+        inclusion_mask = ~np.isin(labels_pointcept, excluded_classes)
+        
+        print(f"Total points: {N}. Analyzing {np.sum(inclusion_mask)} points after excluding classes: {excluded_classes}.")
+        
+        # 분포 계산에 사용할 스케일 값들을 가져옴
+        scales_for_distribution = scales[inclusion_mask]
+        
+        # 최종 스케일 마스크 초기화 (모두 False)
         mask_scale = np.zeros(N, dtype=bool)
         
-        # 씬에 존재하는 모든 유니크한 레이블을 찾음
-        unique_labels = np.unique(labels_pointcept)
-
-        # 각 유니크 레이블(클래스 그룹)에 대해 루프 실행
-        for class_id in tqdm(unique_labels, desc="Analyzing each class group"):
-            # 제외할 클래스인지 확인
-            if class_id in excluded_classes:
-                print(f"Skipping class {class_id} as it is in the excluded list.")
-                continue
-            # 현재 클래스에 해당하는 모든 포인트의 '전체 인덱스'를 찾음
-            group_indices = np.where(labels_pointcept == class_id)[0]
-            # 해당 클래스의 포인트가 너무 적으면 통계적 의미가 없으므로 건너뜀
-            if len(group_indices) < min_class_points:
-                continue
-            # 현재 클래스 그룹의 스케일 값들을 가져옴
-            group_scales = scales[group_indices]
+        # 분석할 포인트가 있는 경우에만 로직 실행
+        if scales_for_distribution.size > 0:
+            # 제외되지 않은 모든 포인트를 기준으로 단일 전역 임계값 계산
+            # 하위 (1.0 - ratio) * 100 % 에 해당하는 스케일 값을 찾음
+            global_threshold = np.percentile(scales_for_distribution, 100 * (1.0 - ratio))
             
-            # 이 클래스 그룹 전체에서 하위 %에 해당하는 스케일 임계값 계산
-            threshold = np.percentile(group_scales, 100 * (1.0 - ratio))
-            
-            is_edge_in_group = group_scales <= threshold
-            # 경계로 판별된 포인트들의 '원래' 전체 인덱스를 가져옴
-            edge_original_indices = group_indices[is_edge_in_group]
+            # --- 전역 임계값을 적용하여 최종 경계 포인트 식별 ---
+            # 1. 스케일이 임계값보다 작거나 같고,
+            # 2. 제외 클래스가 아닌 포인트
+            # 위 두 조건을 모두 만족하는 포인트들의 인덱스를 찾음
+            edge_indices = np.where((scales <= global_threshold) & inclusion_mask)[0]
             
             # 최종 스케일 마스크에 경계 정보를 기록
-            mask_scale[edge_original_indices] = True
+            mask_scale[edge_indices] = True
             
-        print(f"Pruning complete. Found {np.sum(mask_scale)} points as edges (bottom {100 * (1.0 - ratio)}% within each object class).")
+            print(f"Pruning complete. Found {len(edge_indices)} points as edges (globally smallest {100 * (1.0 - ratio):.2f}% of non-excluded points).")
+        else:
+            print("No points left to analyze for scale-based pruning after excluding classes.")
+
         mask &= mask_scale
 
 
@@ -177,7 +179,7 @@ def boundary_labeling_with_semantic_gaussian(
     gaussian_search_radius = prune_params.get('gaussian_search_radius', 0.02)
     sigma_multiplier = prune_params.get('sigma_multiplier', 1.0)
     scale_ratio = prune_methods.get('scale_ratio', 0.0)
-
+    #scale_ratio = 0.1
 
     print("\nStarting OPTIMIZED ambiguity-based boundary detection with separate 3DGS data...")
 

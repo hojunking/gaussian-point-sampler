@@ -13,7 +13,7 @@ def boundary_labeling(pointcept_dir, path_3dgs, output_dir, labeling_method, exp
     points_pointcept = pointcept_data['coord']
     labels_pointcept = pointcept_data['segment20']
     # 2. 3DGS 데이터 로드
-    points_3dgs, _, raw_features_3dgs = load_3dgs_data(path_3dgs)
+    points_3dgs, raw_features_3dgs = load_3dgs_data(path_3dgs)
 
     # 3. 3DGS 속성 전처리
     print("Preprocessing 3DGS attributes...")
@@ -101,6 +101,11 @@ if __name__ == "__main__":
         help="Output path for processed data (default: /home/knuvi/Desktop/song/gaussian-point-sampler/test/test_samples10)",
     )
     parser.add_argument(
+        "--path_3dgs_root",
+        default="/home/knuvi/Desktop/song/gaussian-point-sampler/test/pup_gs",
+        help="Output path for processed data (default: /home/knuvi/Desktop/song/gaussian-point-sampler/test/test_samples10)",
+    )
+    parser.add_argument(
         "--labeling_method",
         default="both",
         choices=["3dgs", "label", "both"],
@@ -130,9 +135,13 @@ if __name__ == "__main__":
     config_path = './config.json'
     with open(config_path, 'r') as f:
         config = json.load(f)
-
+    
     input_root = config['input_root']
-    path_3dgs_root = config['path_3dgs_root']
+    #input_root = args.input_root  # 사용자 지정 입력 경로 사용\
+
+    #path_3dgs_root = config['path_3dgs_root']
+    path_3dgs_root = args.path_3dgs_root  # 사용자 지정 3DGS 경로 사용
+    
     meta_root = config['meta_root']
     prune_params = config['prune_params']
     k_neighbors = prune_params['k_neighbors']
